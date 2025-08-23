@@ -1,0 +1,119 @@
+spring:
+  application:
+    name: sysml-mvp-backend
+  
+  # Web配置
+  web:
+    resources:
+      add-mappings: true
+      static-locations: classpath:/static/
+  
+  # JSON序列化配置
+  jackson:
+    default-property-inclusion: non_null
+    date-format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+      indent-output: true
+  
+  # 文件上传配置
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+      enabled: true
+
+# 服务器配置
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# 应用配置
+app:
+  # 数据存储配置
+  data:
+    root-path: ${DATA_PATH:./data}
+    projects-path: ${app.data.root-path}/projects
+    backup-path: ${app.data.root-path}/backups
+    demo-path: ${app.data.root-path}/demo
+  
+  # 性能限制
+  limits:
+    max-nodes: 500
+    max-file-size: 10485760  # 10MB
+    max-concurrent-users: 5
+    page-size-default: 50
+    page-size-max: 200
+  
+  # 文件锁配置
+  file-lock:
+    retry-count: 3
+    retry-delay-ms: 100
+  
+  # 缓存配置
+  cache:
+    enabled: true
+    max-size: 100
+    ttl-minutes: 15
+
+# 健康检查配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+  info:
+    git:
+      mode: full
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.sysml.mvp: DEBUG
+    org.springframework.web: DEBUG
+    org.eclipse.emf: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${app.data.root-path}/logs/sysml-mvp.log
+    max-size: 10MB
+    max-history: 30
+
+# SpringDoc OpenAPI配置
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  packagesToScan: com.sysml.mvp.controller
+
+# CORS配置
+cors:
+  allowed-origins:
+    - http://localhost:3000
+    - http://127.0.0.1:3000
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowed-headers:
+    - "*"
+  exposed-headers:
+    - Location
+    - Content-Disposition
+  allow-credentials: true
+  max-age: 3600

@@ -1,0 +1,10 @@
+/* 树视图样式 */
+.tree-view-card {
+  height: 100%;
+  overflow: auto;
+}
+
+.tree-view-card .ant-card-body {
+  height: 100%;
+  overflow: auto;
+}

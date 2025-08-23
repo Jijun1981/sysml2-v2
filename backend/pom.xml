@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    
+    <modelVersion>4.0.0</modelVersion>
+    
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.0</version>
+        <relativePath/>
+    </parent>
+    
+    <groupId>com.sysml.mvp</groupId>
+    <artifactId>sysml-mvp-backend</artifactId>
+    <version>0.1.0-MVP</version>
+    <name>SysML v2 MVP Backend</name>
+    <description>SysML v2建模平台MVP后端服务</description>
+    
+    <properties>
+        <java.version>17</java.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        
+        <!-- EMF版本 -->
+        <emf.version>2.35.0</emf.version>
+        <emf.common.version>2.29.0</emf.common.version>
+        <emf.ecore.version>2.35.0</emf.ecore.version>
+        
+        <!-- Spring版本 -->
+        <spring-boot.version>3.2.0</spring-boot.version>
+        
+        <!-- 工具库版本 -->
+        <lombok.version>1.18.30</lombok.version>
+        <jackson.version>2.16.0</jackson.version>
+        <commons-io.version>2.15.1</commons-io.version>
+        <commons-lang3.version>3.14.0</commons-lang3.version>
+        
+        <!-- 测试框架版本 -->
+        <junit.version>5.10.1</junit.version>
+        <mockito.version>5.7.0</mockito.version>
+    </properties>
+    
+    <dependencies>
+        <!-- Spring Boot核心依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        
+        <!-- Spring Shell (可选，用于CLI) -->
+        <dependency>
+            <groupId>org.springframework.shell</groupId>
+            <artifactId>spring-shell-starter</artifactId>
+            <version>3.1.6</version>
+        </dependency>
+        
+        <!-- EMF核心依赖 -->
+        <dependency>
+            <groupId>org.eclipse.emf</groupId>
+            <artifactId>org.eclipse.emf.common</artifactId>
+            <version>${emf.common.version}</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.eclipse.emf</groupId>
+            <artifactId>org.eclipse.emf.ecore</artifactId>
+            <version>${emf.ecore.version}</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.eclipse.emf</groupId>
+            <artifactId>org.eclipse.emf.ecore.xmi</artifactId>
+            <version>${emf.ecore.version}</version>
+        </dependency>
+        
+        <!-- EMF JSON支持 -->
+        <dependency>
+            <groupId>org.eclipse.emfcloud</groupId>
+            <artifactId>emfjson-jackson</artifactId>
+            <version>2.1.0</version>
+        </dependency>
+        
+        <!-- Jackson JSON处理 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        
+        <!-- 工具库 -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>${commons-io.version}</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>${commons-lang3.version}</version>
+        </dependency>
+        
+        <!-- Swagger/OpenAPI文档 (可选) -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.3.0</version>
+        </dependency>
+        
+        <!-- 文件监控 (用于检测文件变化) -->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>${commons-io.version}</version>
+        </dependency>
+        
+        <!-- 测试依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+        
+        <!-- 开发工具 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+    
+    <build>
+        <plugins>
+            <!-- Spring Boot Maven插件 -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            
+            <!-- Maven编译插件 -->
+            <plugin>
+                <groupId>org.apache.maven.compiler</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+            
+            <!-- Maven资源插件 -->
+            <plugin>
+                <groupId>org.apache.maven.resources</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <configuration>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+            
+            <!-- EMF代码生成插件 (可选，如果需要从Ecore生成代码) -->
+            <plugin>
+                <groupId>org.eclipse.emf</groupId>
+                <artifactId>emf-maven-plugin</artifactId>
+                <version>2.1.0</version>
+                <configuration>
+                    <genModel>src/main/resources/model/SysML.genmodel</genModel>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+    
+    <repositories>
+        <!-- Spring仓库 -->
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+        </repository>
+        
+        <!-- Eclipse EMF仓库 -->
+        <repository>
+            <id>eclipse</id>
+            <name>Eclipse Repository</name>
+            <url>https://repo.eclipse.org/content/groups/releases/</url>
+        </repository>
+        
+        <!-- EMF Cloud仓库 -->
+        <repository>
+            <id>emfcloud</id>
+            <name>EMF Cloud Repository</name>
+            <url>https://raw.githubusercontent.com/eclipse-emfcloud/emfcloud-maven/master/</url>
+        </repository>
+    </repositories>
+</project>

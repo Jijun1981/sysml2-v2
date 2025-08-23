@@ -1,0 +1,6 @@
+/* 应用样式 */
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

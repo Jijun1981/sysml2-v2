@@ -1,0 +1,830 @@
+# SysML v2 MVP 追踪矩阵
+# 版本: 1.0
+# 更新时间: 2025-01-15
+# 说明: 用于追踪Epic、Story、Requirement、代码实现和测试用例的关联关系
+
+metadata:
+  project: SysML v2 MVP
+  version: "0.1.0-MVP"
+  created: "2025-01-15"
+  updated: "2025-01-15"
+  status: "开发中"
+
+# 史诗级任务
+epics:
+  - id: EPIC-A
+    title: "架构与数据一致性"
+    priority: P0
+    status: "待开发"
+    stories: [STORY-A1, STORY-A2]
+    
+  - id: EPIC-B
+    title: "EMF基座与持久化"
+    priority: P0
+    status: "待开发"
+    stories: [STORY-B1, STORY-B2, STORY-B3, STORY-B4]
+    
+  - id: EPIC-C
+    title: "需求与追溯CRUD"
+    priority: P0
+    status: "待开发"
+    stories: [STORY-C1, STORY-C2, STORY-C3]
+    
+  - id: EPIC-D
+    title: "三视图联动"
+    priority: P0
+    status: "待开发"
+    stories: [STORY-D1, STORY-D2, STORY-D3]
+    
+  - id: EPIC-E
+    title: "静态校验"
+    priority: P0
+    status: "待开发"
+    stories: [STORY-E1]
+    
+  - id: EPIC-F
+    title: "依赖与交付"
+    priority: P0
+    status: "进行中"
+    stories: [STORY-F1]
+
+# 用户故事
+stories:
+  # EPIC A - 架构与数据一致性
+  - id: STORY-A1
+    epic: EPIC-A
+    title: "单一数据源（SSOT）"
+    as: "系统"
+    i_want: "只有一个M1资源作为事实来源"
+    so_that: "树/表/图一致"
+    status: "待开发"
+    requirements: [REQ-A1-1, REQ-A1-2, REQ-A1-3]
+    
+  - id: STORY-A2
+    epic: EPIC-A
+    title: "健康检查"
+    as: "运维"
+    i_want: "系统健康检查端点"
+    so_that: "快速诊断问题"
+    status: "待开发"
+    requirements: [REQ-A2-1, REQ-A2-2]
+
+  # EPIC B - EMF基座与持久化
+  - id: STORY-B1
+    epic: EPIC-B
+    title: "本地Ecore & JSON资源工厂"
+    as: "平台"
+    i_want: "本地SysML2子集Ecore与JSON序列化"
+    so_that: "文件即模型"
+    status: "待开发"
+    requirements: [REQ-B1-1, REQ-B1-2, REQ-B1-3, REQ-B1-4]
+    
+  - id: STORY-B2
+    epic: EPIC-B
+    title: "统一工厂创建"
+    as: "开发者"
+    i_want: "用统一接口创建对象"
+    so_that: "默认值一致可控"
+    status: "待开发"
+    requirements: [REQ-B2-1, REQ-B2-2, REQ-B2-3]
+    
+  - id: STORY-B3
+    epic: EPIC-B
+    title: "项目导入/导出（JSON）"
+    as: "用户"
+    i_want: "项目落盘与恢复"
+    so_that: "可迁移与演示"
+    status: "待开发"
+    requirements: [REQ-B3-1, REQ-B3-2, REQ-B3-3]
+    
+  - id: STORY-B4
+    epic: EPIC-B
+    title: "快速原型验证"
+    as: "开发者"
+    i_want: "CLI"
+    so_that: "不依赖前端快速验证模型"
+    priority: P1
+    status: "待开发"
+    requirements: [REQ-B4-1]
+
+  # EPIC C - 需求与追溯CRUD
+  - id: STORY-C1
+    epic: EPIC-C
+    title: "RequirementDefinition CRUD"
+    as: "分析师"
+    i_want: "管理Definition"
+    so_that: "形成标准化shall"
+    status: "待开发"
+    requirements: [REQ-C1-1, REQ-C1-2, REQ-C1-3]
+    
+  - id: STORY-C2
+    epic: EPIC-C
+    title: "RequirementUsage CRUD"
+    as: "分析师"
+    i_want: "基于Definition实例化"
+    so_that: "复用与分配"
+    status: "待开发"
+    requirements: [REQ-C2-1, REQ-C2-2]
+    
+  - id: STORY-C3
+    epic: EPIC-C
+    title: "Trace CRUD"
+    as: "用户"
+    i_want: "建立追溯"
+    so_that: "可视化与校验"
+    status: "待开发"
+    requirements: [REQ-C3-1, REQ-C3-2, REQ-C3-3, REQ-C3-4]
+
+  # EPIC D - 三视图联动
+  - id: STORY-D1
+    epic: EPIC-D
+    title: "树视图"
+    as: "用户"
+    i_want: "层级浏览与轻编辑"
+    so_that: "快速定位"
+    status: "待开发"
+    requirements: [REQ-D1-1, REQ-D1-2, REQ-D1-3]
+    
+  - id: STORY-D2
+    epic: EPIC-D
+    title: "表视图"
+    as: "用户"
+    i_want: "批量筛选与操作"
+    so_that: "高效处理"
+    status: "待开发"
+    requirements: [REQ-D2-1, REQ-D2-2]
+    
+  - id: STORY-D3
+    epic: EPIC-D
+    title: "图视图（React Flow）"
+    as: "用户"
+    i_want: "直观查看关系"
+    so_that: "追溯清晰"
+    status: "待开发"
+    requirements: [REQ-D3-1, REQ-D3-2, REQ-D3-3]
+
+  # EPIC E - 静态校验
+  - id: STORY-E1
+    epic: EPIC-E
+    title: "核心静态校验"
+    as: "用户"
+    i_want: "一键发现关键问题"
+    so_that: "保证基本质量"
+    status: "待开发"
+    requirements: [REQ-E1-1, REQ-E1-2, REQ-E1-3, REQ-E1-4]
+
+  # EPIC F - 依赖与交付
+  - id: STORY-F1
+    epic: EPIC-F
+    title: "离线构建与镜像"
+    as: "DevOps"
+    i_want: "构建与运行不依赖外网"
+    so_that: "可在内网/断网稳定交付"
+    status: "进行中"
+    requirements: [REQ-F1-1, REQ-F1-2]
+
+# 需求定义
+requirements:
+  # STORY A1 - 单一数据源
+  - id: REQ-A1-1
+    story: STORY-A1
+    title: "数据源唯一"
+    acceptance_criteria: "Given 系统运行，When 任一视图对对象创建/更新，Then 另两视图在不刷新情况下看到同一id的同步变更"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-A1-2
+    story: STORY-A1
+    title: "视图为投影"
+    acceptance_criteria: "树/表/图不得各自持久化副本；只读导出不得作为并行数据源编辑"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-A1-3
+    story: STORY-A1
+    title: "性能底线"
+    acceptance_criteria: "在500节点/1000边模型上，视图联动平均响应<500ms；超出规模自动启用分页/懒加载"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY A2 - 健康检查
+  - id: REQ-A2-1
+    story: STORY-A2
+    title: "基础健康检查"
+    acceptance_criteria: "GET /health 响应 {status:UP|DOWN,buildVersion,gitCommit,serverTimeUtc}；响应<100ms"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-A2-2
+    story: STORY-A2
+    title: "EMF模型健康"
+    acceptance_criteria: "GET /health/model 返回已注册EPackage列表与来源标识"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY B1 - 本地Ecore & JSON资源工厂
+  - id: REQ-B1-1
+    story: STORY-B1
+    title: "本地包注册（零Pilot依赖）"
+    acceptance_criteria: "启动将本地urn:your:sysml2 EPackage注册进EPackage.Registry；运行时不得加载org.omg.sysml*/Pilot实现"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-B1-2
+    story: STORY-B1
+    title: "JSON工厂"
+    acceptance_criteria: "为.json注册EMF JSON资源工厂；ResourceSet能创建/加载/保存；模型根包含_version:1.0"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-B1-3
+    story: STORY-B1
+    title: "回读一致性"
+    acceptance_criteria: "新建→保存→再加载：根数量、eClass、id完全一致；未知字段保留；循环引用以$ref序列化且能回读"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-B1-4
+    story: STORY-B1
+    title: "Demo数据"
+    acceptance_criteria: "仓库含demo-project.json（≥8 Definition、≥5 Trace）；另提供small(10)/medium(100)/large(500)三套数据集"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY B2 - 统一工厂创建
+  - id: REQ-B2-1
+    story: STORY-B2
+    title: "创建API"
+    acceptance_criteria: "提供createDefinition()/createUsage(ofId)/createTrace(fromId,toId,type)；缺参→400"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-B2-2
+    story: STORY-B2
+    title: "默认值"
+    acceptance_criteria: "新建默认status='draft',tags=[]；ID采用稳定UUID或R-/U-/T-前缀+序号"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-B2-3
+    story: STORY-B2
+    title: "ID稳定"
+    acceptance_criteria: "导出→导入后，同一对象id不变"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY B3 - 项目导入/导出
+  - id: REQ-B3-1
+    story: STORY-B3
+    title: "导出JSON"
+    acceptance_criteria: "GET /projects/{pid}/export 返回application/json，并附规范文件名"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-B3-2
+    story: STORY-B3
+    title: "导入JSON"
+    acceptance_criteria: "POST /projects/{pid}/import 成功导入；非法文件返回行/列/原因"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-B3-3
+    story: STORY-B3
+    title: "一致性"
+    acceptance_criteria: "导出后再导入，元素计数、交叉引用与id完全一致"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY B4 - 快速原型验证
+  - id: REQ-B4-1
+    story: STORY-B4
+    title: "CLI支持"
+    acceptance_criteria: "提供Spring Shell命令：create-req、list-req、create-trace"
+    priority: P1
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY C1 - RequirementDefinition CRUD
+  - id: REQ-C1-1
+    story: STORY-C1
+    title: "创建"
+    acceptance_criteria: "POST /requirements（type=definition）缺reqId|name|text→400；成功201返回对象与Location"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-C1-2
+    story: STORY-C1
+    title: "读/改/删"
+    acceptance_criteria: "GET|PUT|DELETE /requirements/{id}可用；允许更新name,text,doc,tags,subjectRef,constraints,assumptions；被引用删除→409"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-C1-3
+    story: STORY-C1
+    title: "reqId唯一"
+    acceptance_criteria: "创建/更新触发唯一性校验；冲突返回409并给出冲突对象id列表"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY C2 - RequirementUsage CRUD
+  - id: REQ-C2-1
+    story: STORY-C2
+    title: "创建"
+    acceptance_criteria: "POST /requirements（type=usage,of=defId）；缺of→400；defId不存在→404"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-C2-2
+    story: STORY-C2
+    title: "读/改/删"
+    acceptance_criteria: "更新允许name,text,status,tags；存在Trace时删除→409（返回阻塞traceIds）"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY C3 - Trace CRUD
+  - id: REQ-C3-1
+    story: STORY-C3
+    title: "创建"
+    acceptance_criteria: "POST /requirements/{id}/traces {toId,type}；type∈{derive,satisfy,refine,trace}；fromId==toId→400；toId不存在→404；成功对象含createdAt(UTC)"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-C3-2
+    story: STORY-C3
+    title: "查询"
+    acceptance_criteria: "GET /requirements/{id}/traces?dir=in|out|both 返回入/出边"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-C3-3
+    story: STORY-C3
+    title: "去重"
+    acceptance_criteria: "同(from,to,type)不重复创建；重复请求返回既有对象200"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-C3-4
+    story: STORY-C3
+    title: "删除"
+    acceptance_criteria: "DELETE /traces/{traceId}→204；不存在→404"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY D1 - 树视图
+  - id: REQ-D1-1
+    story: STORY-D1
+    title: "接口"
+    acceptance_criteria: "GET /tree 返回Definition为父、Usage为子；支持懒加载"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-D1-2
+    story: STORY-D1
+    title: "写回"
+    acceptance_criteria: "创建/重命名/拖拽改层级触发REST写回；非法层级变更→400"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-D1-3
+    story: STORY-D1
+    title: "联动"
+    acceptance_criteria: "树选中项在表/图中高亮同一id"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY D2 - 表视图
+  - id: REQ-D2-1
+    story: STORY-D2
+    title: "接口"
+    acceptance_criteria: "GET /table?page&size&sort&q，列包含reqId,name,type,tags,status；支持虚拟滚动"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-D2-2
+    story: STORY-D2
+    title: "联动"
+    acceptance_criteria: "点击表行联动树/图高亮"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY D3 - 图视图
+  - id: REQ-D3-1
+    story: STORY-D3
+    title: "接口"
+    acceptance_criteria: "GET /graph?rootId 返回nodes/edges；节点含id,type,label，边含from,to,type。rootId为空时返回分页/窗口化全局子图"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-D3-2
+    story: STORY-D3
+    title: "连线/删线"
+    acceptance_criteria: "连线/删线分别调用Trace创建/删除；失败回滚UI并提示原因"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-D3-3
+    story: STORY-D3
+    title: "自动布局"
+    acceptance_criteria: "提供自动布局（dagre/elkjs）；≤500节点布局完成<3s；交互流畅"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY E1 - 核心静态校验
+  - id: REQ-E1-1
+    story: STORY-E1
+    title: "MVP规则集"
+    acceptance_criteria: "仅检测(1)reqId唯一(Definitions)，(2)derive/refine循环依赖，(3)悬挂引用(fromId/toId不存在)"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-E1-2
+    story: STORY-E1
+    title: "规则码"
+    acceptance_criteria: "返回ruleCode∈{DUP_REQID,CYCLE_DERIVE_REFINE,BROKEN_REF}"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-E1-3
+    story: STORY-E1
+    title: "接口返回"
+    acceptance_criteria: "POST /validate/static {ids?:[]}→{violations:[{ruleCode,targetId,message,details?}]}；≤500元素处理<2s"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+    
+  - id: REQ-E1-4
+    story: STORY-E1
+    title: "前端呈现"
+    acceptance_criteria: "违规对象在视图中高亮；可导出JSON报告"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+  # STORY F1 - 离线构建与镜像
+  - id: REQ-F1-1
+    story: STORY-F1
+    title: "Maven镜像"
+    acceptance_criteria: "提供settings.offline.xml，<mirrorOf>*</mirrorOf>指向内网或file:仓库；mvn -o -s settings.offline.xml verify成功"
+    status: "完成"
+    code_files: 
+      - backend/pom.xml
+    test_cases: []
+    
+  - id: REQ-F1-2
+    story: STORY-F1
+    title: "供应链守门"
+    acceptance_criteria: "启用maven-enforcer禁止非白名单仓库；生成SBOM，依赖仅指向内网域/file:"
+    status: "待开发"
+    code_files: []
+    test_cases: []
+
+# 代码实现追踪
+code_implementations:
+  # 后端Java代码
+  - file: backend/pom.xml
+    type: configuration
+    requirements: [REQ-F1-1]
+    status: "已创建"
+    tests: []
+    
+  - file: backend/src/main/resources/application.yml
+    type: configuration
+    requirements: []
+    status: "已创建"
+    tests: []
+    
+  - file: backend/src/main/java/com/sysml/mvp/model/EMFModelRegistry.java
+    type: implementation
+    requirements: [REQ-B1-1]
+    status: "待开发"
+    tests: [TEST-B1-1-01]
+    
+  - file: backend/src/main/java/com/sysml/mvp/repository/FileModelRepository.java
+    type: implementation
+    requirements: [REQ-B1-2, REQ-B1-3]
+    status: "待开发"
+    tests: [TEST-B1-2-01, TEST-B1-3-01]
+    
+  - file: backend/src/main/java/com/sysml/mvp/service/RequirementService.java
+    type: implementation
+    requirements: [REQ-C1-1, REQ-C1-2, REQ-C2-1, REQ-C2-2]
+    status: "待开发"
+    tests: [TEST-C1-1-01, TEST-C1-2-01]
+    
+  - file: backend/src/main/java/com/sysml/mvp/service/TraceService.java
+    type: implementation
+    requirements: [REQ-C3-1, REQ-C3-2, REQ-C3-3, REQ-C3-4]
+    status: "待开发"
+    tests: [TEST-C3-1-01, TEST-C3-3-01]
+    
+  - file: backend/src/main/java/com/sysml/mvp/service/ValidationService.java
+    type: implementation
+    requirements: [REQ-E1-1, REQ-E1-2, REQ-E1-3]
+    status: "待开发"
+    tests: [TEST-E1-1-01, TEST-E1-2-01]
+    
+  - file: backend/src/main/java/com/sysml/mvp/controller/HealthController.java
+    type: implementation
+    requirements: [REQ-A2-1, REQ-A2-2]
+    status: "待开发"
+    tests: [TEST-A2-1-01]
+    
+  - file: backend/src/main/java/com/sysml/mvp/controller/RequirementController.java
+    type: implementation
+    requirements: [REQ-C1-1, REQ-C1-2, REQ-C2-1, REQ-C2-2]
+    status: "待开发"
+    tests: []
+    
+  - file: backend/src/main/java/com/sysml/mvp/controller/ProjectController.java
+    type: implementation
+    requirements: [REQ-B3-1, REQ-B3-2]
+    status: "待开发"
+    tests: [TEST-B3-1-01, TEST-B3-3-01]
+    
+  - file: backend/src/main/java/com/sysml/mvp/controller/ViewController.java
+    type: implementation
+    requirements: [REQ-D1-1, REQ-D2-1, REQ-D3-1]
+    status: "待开发"
+    tests: []
+
+  # 前端TypeScript代码
+  - file: frontend/package.json
+    type: configuration
+    requirements: []
+    status: "已创建"
+    tests: []
+    
+  - file: frontend/src/components/TreeView.tsx
+    type: implementation
+    requirements: [REQ-D1-1, REQ-D1-2, REQ-D1-3]
+    status: "待开发"
+    tests: [TEST-D1-3-01]
+    
+  - file: frontend/src/components/TableView.tsx
+    type: implementation
+    requirements: [REQ-D2-1, REQ-D2-2]
+    status: "待开发"
+    tests: [TEST-D2-2-01]
+    
+  - file: frontend/src/components/GraphView.tsx
+    type: implementation
+    requirements: [REQ-D3-1, REQ-D3-2, REQ-D3-3]
+    status: "待开发"
+    tests: [TEST-D3-2-01]
+    
+  - file: frontend/src/contexts/ModelContext.tsx
+    type: implementation
+    requirements: [REQ-A1-1, REQ-A1-2]
+    status: "待开发"
+    tests: [TEST-A1-1-01]
+    
+  - file: frontend/src/services/api.ts
+    type: implementation
+    requirements: []
+    status: "待开发"
+    tests: []
+
+# 测试用例定义
+test_cases:
+  # 单元测试
+  - id: TEST-B1-1-01
+    requirement: REQ-B1-1
+    type: unit
+    title: "测试EPackage注册"
+    file: backend/src/test/java/com/sysml/mvp/model/EMFModelRegistryTest.java
+    status: "待开发"
+    
+  - id: TEST-B1-2-01
+    requirement: REQ-B1-2
+    type: unit
+    title: "测试JSON序列化"
+    file: backend/src/test/java/com/sysml/mvp/repository/FileModelRepositoryTest.java
+    status: "待开发"
+    
+  - id: TEST-B1-3-01
+    requirement: REQ-B1-3
+    type: unit
+    title: "测试回读一致性"
+    file: backend/src/test/java/com/sysml/mvp/repository/ConsistencyTest.java
+    status: "待开发"
+    
+  - id: TEST-C1-1-01
+    requirement: REQ-C1-1
+    type: unit
+    title: "测试需求创建"
+    file: backend/src/test/java/com/sysml/mvp/service/RequirementServiceTest.java
+    status: "待开发"
+    
+  - id: TEST-C1-2-01
+    requirement: REQ-C1-2
+    type: unit
+    title: "测试需求CRUD操作"
+    file: backend/src/test/java/com/sysml/mvp/service/RequirementCrudTest.java
+    status: "待开发"
+    
+  - id: TEST-C3-1-01
+    requirement: REQ-C3-1
+    type: unit
+    title: "测试追溯创建"
+    file: backend/src/test/java/com/sysml/mvp/service/TraceServiceTest.java
+    status: "待开发"
+    
+  - id: TEST-C3-3-01
+    requirement: REQ-C3-3
+    type: unit
+    title: "测试追溯去重"
+    file: backend/src/test/java/com/sysml/mvp/service/TraceDuplicateTest.java
+    status: "待开发"
+    
+  - id: TEST-E1-1-01
+    requirement: REQ-E1-1
+    type: unit
+    title: "测试校验规则"
+    file: backend/src/test/java/com/sysml/mvp/service/ValidationServiceTest.java
+    status: "待开发"
+    
+  - id: TEST-E1-2-01
+    requirement: REQ-E1-2
+    type: unit
+    title: "测试规则码返回"
+    file: backend/src/test/java/com/sysml/mvp/service/ValidationRuleCodeTest.java
+    status: "待开发"
+
+  # 集成测试
+  - id: TEST-A1-1-01
+    requirement: REQ-A1-1
+    type: integration
+    title: "测试三视图数据同步"
+    file: frontend/src/__tests__/ViewSync.test.tsx
+    status: "待开发"
+    
+  - id: TEST-A2-1-01
+    requirement: REQ-A2-1
+    type: integration
+    title: "测试健康检查端点"
+    file: backend/src/test/java/com/sysml/mvp/controller/HealthControllerIT.java
+    status: "待开发"
+    
+  - id: TEST-B3-1-01
+    requirement: REQ-B3-1
+    type: integration
+    title: "测试项目导出"
+    file: backend/src/test/java/com/sysml/mvp/controller/ProjectExportIT.java
+    status: "待开发"
+    
+  - id: TEST-B3-3-01
+    requirement: REQ-B3-3
+    type: integration
+    title: "测试导入导出一致性"
+    file: backend/src/test/java/com/sysml/mvp/controller/ImportExportConsistencyIT.java
+    status: "待开发"
+    
+  - id: TEST-D1-3-01
+    requirement: REQ-D1-3
+    type: integration
+    title: "测试树视图联动"
+    file: frontend/src/__tests__/TreeViewIntegration.test.tsx
+    status: "待开发"
+    
+  - id: TEST-D2-2-01
+    requirement: REQ-D2-2
+    type: integration
+    title: "测试表视图联动"
+    file: frontend/src/__tests__/TableViewIntegration.test.tsx
+    status: "待开发"
+    
+  - id: TEST-D3-2-01
+    requirement: REQ-D3-2
+    type: integration
+    title: "测试图视图连线"
+    file: frontend/src/__tests__/GraphViewIntegration.test.tsx
+    status: "待开发"
+
+  # 端到端测试
+  - id: TEST-E2E-01
+    requirement: REQ-A1-1
+    type: e2e
+    title: "端到端测试：创建需求并验证三视图同步"
+    file: e2e/tests/create-requirement.spec.js
+    status: "待开发"
+    
+  - id: TEST-E2E-02
+    requirement: REQ-C3-1
+    type: e2e
+    title: "端到端测试：创建追溯关系"
+    file: e2e/tests/create-trace.spec.js
+    status: "待开发"
+    
+  - id: TEST-E2E-03
+    requirement: REQ-E1-1
+    type: e2e
+    title: "端到端测试：执行静态校验"
+    file: e2e/tests/validation.spec.js
+    status: "待开发"
+
+# 开发进度统计
+statistics:
+  total_epics: 6
+  total_stories: 15
+  total_requirements: 47
+  total_code_files: 24
+  total_test_cases: 23
+  
+  by_status:
+    epics:
+      待开发: 5
+      进行中: 1
+      完成: 0
+    stories:
+      待开发: 14
+      进行中: 1
+      完成: 0
+    requirements:
+      待开发: 46
+      进行中: 0
+      完成: 1
+    code_files:
+      待开发: 21
+      已创建: 3
+      完成: 0
+    test_cases:
+      待开发: 23
+      进行中: 0
+      完成: 0
+  
+  coverage:
+    requirements_with_code: "2.1%"  # 1/47
+    requirements_with_tests: "0%"   # 0/47
+    code_with_tests: "0%"           # 0/24
+
+# 风险和问题
+risks_and_issues:
+  - id: RISK-001
+    type: risk
+    title: "EMF学习曲线陡峭"
+    impact: "高"
+    probability: "高"
+    mitigation: "提供示例代码，团队培训"
+    status: "开放"
+    
+  - id: RISK-002
+    type: risk
+    title: "文件IO性能差"
+    impact: "中"
+    probability: "中"
+    mitigation: "内存缓存，异步保存"
+    status: "开放"
+    
+  - id: ISSUE-001
+    type: issue
+    title: "EMF JSON序列化库版本兼容性"
+    severity: "中"
+    description: "emfjson-jackson可能与Spring Boot的Jackson版本冲突"
+    resolution: "待解决"
+    status: "开放"
+
+# 版本历史
+version_history:
+  - version: "1.0"
+    date: "2025-01-15"
+    author: "System"
+    changes:
+      - "初始版本创建"
+      - "导入需求文档中的所有Epic、Story和Requirement"
+      - "创建代码文件和测试用例的追踪结构"
+      - "添加统计和风险管理部分"
