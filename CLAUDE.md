@@ -40,13 +40,14 @@ frontend/
 
 ## Development Commands
 
-**当前项目状态**: 仅有设计文档，尚未实现代码
+**当前项目状态**: 后端基础框架已搭建，EMF模型和CRUD接口部分实现
 
-根据需求文档，预期的开发命令将包括：
-- `mvn clean verify` - 构建后端项目
-- `npm start` - 启动前端开发服务器
-- `java -jar backend.jar` - 运行后端服务（无需数据库）
-- Maven构建脚本待实现
+实际开发命令：
+- `mvn clean compile` - 编译后端项目
+- `mvn spring-boot:run` - 启动后端服务（端口8080）
+- `mvn test` - 运行测试用例
+- `curl http://localhost:8080/api/v1/requirements` - 测试REST API
+- API基础路径: `/api/v1` (配置在application.yml)
 
 ## Data Model
 
@@ -95,3 +96,37 @@ frontend/
 - 数据库依赖（PostgreSQL等）
 - 性能优化（索引、缓存）
 - 大规模并发访问（建议≤5用户并发）
+
+## Technical Decisions & Issues
+
+### 2025-08-23 开发记录
+
+1. **EMF集成方案**：
+   - 使用本地 `urn:your:sysml2` 命名空间，避免外部依赖
+   - 创建自定义 `SysMLResourceFactory` 处理所有URI协议
+   - 注册简化的3个EClass：RequirementDefinition, RequirementUsage, Trace
+
+2. **JSON序列化问题及解决**：
+   - **问题**：EMF Jackson库与Spring Boot Jackson版本冲突导致循环引用
+   - **参考方案**：研究Syson项目，发现其使用Sirius EMF JSON库
+   - **当前状态**：实现自定义ResourceFactory绕过URN协议URL问题
+   - **待解决**：JsonResource序列化时的ResourceSet循环引用
+
+3. **已实现功能**：
+   - ✅ REQ-C1-1: POST创建RequirementDefinition（含必填字段验证）
+   - ✅ REQ-C1-2: GET/PUT/DELETE操作基本实现
+   - ✅ REQ-C1-3: reqId唯一性验证（409冲突响应）
+   - ✅ 全局异常处理器
+   - ✅ 完整的测试用例编写
+
+4. **关键代码文件**：
+   - `EMFModelRegistry.java` - EPackage注册
+   - `SysMLResourceFactory.java` - 统一的资源工厂
+   - `FileModelRepository.java` - 文件系统持久化
+   - `RequirementService.java` - 业务逻辑实现
+   - `RequirementControllerTest.java` - 完整测试覆盖
+
+5. **重要经验教训**：
+   - 不要绕过问题，要深入理解并解决根本原因
+   - 参考开源项目（如Syson）的成熟实现方案
+   - EMF与Spring Boot集成需要特别处理Jackson版本兼容性

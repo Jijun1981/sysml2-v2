@@ -2,9 +2,9 @@
 
 ## 文档信息
 
-* **版本** : 1.1
-* **日期** : 2025-01
-* **状态** : MVP架构定稿（对齐需求文档）
+* **版本** : 1.2
+* **日期** : 2025-08-23
+* **状态** : MVP架构定稿（含Trace CRUD实现）
 * **关联文档** : 《MVP需求书v2.1》、《API接口文档v1.0》
 
 ---
@@ -99,12 +99,11 @@ public class EMFModelRegistry {
 #### 2.2.2 持久化设计（JSON文件）
 
 ```java
-// 替换数据库为文件系统存储
+// 使用sirius-emfjson库进行JSON序列化（参考Syson实现）
 @Component
 public class FileModelRepository {
     
     private static final String DATA_ROOT = "data/projects";
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, ResourceSet> resourceCache = new ConcurrentHashMap<>();
     
     // 项目文件路径: data/projects/{projectId}/model.json
@@ -112,19 +111,39 @@ public class FileModelRepository {
         return Paths.get(DATA_ROOT, projectId, "model.json");
     }
     
+    // 创建JsonResource（使用sirius-emfjson）
+    private JsonResource createJsonResource(URI uri, ResourceSet resourceSet) {
+        // 使用JsonResourceFactoryImpl创建资源
+        JsonResource resource = (JsonResource) new JsonResourceFactoryImpl()
+            .createResource(uri);
+        resourceSet.getResources().add(resource);
+        
+        // 添加CrossReferenceAdapter处理引用
+        resourceSet.eAdapters().add(new EditingContextCrossReferenceAdapter());
+        
+        return resource;
+    }
+    
     // 加载项目模型
     public Resource loadProject(String projectId) {
         Path projectPath = getProjectPath(projectId);
+        ResourceSet resourceSet = new ResourceSetImpl();
+        
+        URI uri = URI.createFileURI(projectPath.toString());
+        JsonResource resource = createJsonResource(uri, resourceSet);
+        
         if (!Files.exists(projectPath)) {
-            return createEmptyProject(projectId);
+            // 创建空项目
+            return resource;
         }
         
-        ResourceSet resourceSet = new ResourceSetImpl();
-        Resource resource = resourceSet.createResource(
-            URI.createFileURI(projectPath.toString()));
-        
         try {
-            resource.load(Collections.emptyMap());
+            // 加载选项：避免循环引用
+            Map<String, Object> options = new HashMap<>();
+            options.put(JsonResource.OPTION_ENCODING, "UTF-8");
+            options.put(JsonResource.OPTION_FORCE_DEFAULT_REFERENCE_SERIALIZATION, Boolean.TRUE);
+            
+            resource.load(options);
             resourceCache.put(projectId, resourceSet);
             return resource;
         } catch (IOException e) {
@@ -138,7 +157,13 @@ public class FileModelRepository {
             Path projectPath = getProjectPath(projectId);
             Files.createDirectories(projectPath.getParent());
             
-            resource.save(Collections.emptyMap());
+            // 保存选项：生成标准EMF JSON格式
+            Map<String, Object> options = new HashMap<>();
+            options.put(JsonResource.OPTION_ENCODING, "UTF-8");
+            options.put(JsonResource.OPTION_FORCE_DEFAULT_REFERENCE_SERIALIZATION, Boolean.TRUE);
+            options.put(JsonResource.OPTION_SCHEMA_LOCATION, Boolean.TRUE);
+            
+            resource.save(options);
             
             // 更新时间戳
             updateProjectTimestamp(projectId);
@@ -215,6 +240,58 @@ public class RequirementService {
         return definition;
     }
 }
+
+@Service  
+public class TraceService {
+    
+    @Autowired
+    private FileModelRepository repository;
+    
+    @Autowired
+    private EMFModelRegistry modelRegistry;
+    
+    // REQ-C3-1: 创建Trace关系
+    public TraceDTO createTrace(String fromId, TraceDTO.CreateRequest request) {
+        // 验证fromId≠toId，验证双方存在性
+        validateRequirementExists(fromId, "fromId对应的需求不存在");
+        validateRequirementExists(request.getToId(), "toId对应的需求不存在");
+        
+        if (fromId.equals(request.getToId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fromId和toId不能相同");
+        }
+        
+        // 创建并保存Trace对象
+        Resource resource = repository.loadProject(PROJECT_ID);
+        EObject trace = modelRegistry.createTrace(fromId, request.getToId(), request.getType());
+        resource.getContents().add(trace);
+        repository.saveProject(PROJECT_ID, resource);
+        
+        return convertToDTO(trace);
+    }
+    
+    // REQ-C3-2: 方向查询（in/out/both）
+    public List<TraceDTO> getTracesByRequirement(String requirementId, String direction) {
+        List<EObject> allTraces = repository.findByType(PROJECT_ID, "Trace");
+        
+        return allTraces.stream()
+            .filter(trace -> matchesDirection(trace, requirementId, direction))
+            .map(this::convertToDTO)
+            .collect(Collectors.toList());
+    }
+    
+    // REQ-C3-4: 删除Trace
+    public void deleteTrace(String traceId) {
+        Resource resource = repository.loadProject(PROJECT_ID);
+        EObject trace = findTraceById(resource, traceId);
+        
+        if (trace == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Trace关系不存在");
+        }
+        
+        resource.getContents().remove(trace);
+        repository.saveProject(PROJECT_ID, resource);
+    }
+}
 ```
 
 ### 2.3 前端架构
@@ -244,10 +321,17 @@ interface ModelContextType {
     selectedId: string | null;
     loading: boolean;
   
-    // 操作
+    // 需求操作
     createRequirement: (req: CreateRequest) => Promise<void>;
     updateRequirement: (id: string, updates: any) => Promise<void>;
     deleteRequirement: (id: string) => Promise<void>;
+    
+    // Trace操作（REQ-C3-1至REQ-C3-4）
+    createTrace: (fromId: string, req: CreateTraceRequest) => Promise<TraceDTO>;
+    getTracesByRequirement: (id: string, dir: 'in'|'out'|'both') => Promise<TraceDTO[]>;
+    deleteTrace: (traceId: string) => Promise<void>;
+    
+    // 视图联动
     selectElement: (id: string) => void;
 }
 
@@ -290,12 +374,23 @@ viewSync.on('element.selected', (id) => {
 
 ### 3.1 CRUD数据流
 
+**需求CRUD流程：**
 ```
-用户操作 → React组件 → Fetch API → Spring Controller 
+用户操作 → React组件 → Fetch API → RequirementController 
     ↓                                      ↓
-状态更新 ← JSON响应 ← Service处理 ← FileRepository
+状态更新 ← JSON响应 ← RequirementService ← FileRepository
     ↓                     ↓                ↓
 视图刷新              EMF操作         JSON文件
+```
+
+**Trace CRUD流程（REQ-C3）：**
+```
+图视图连线 → TraceController → TraceService → EMF操作
+    ↓               ↓                ↓            ↓
+图形更新    POST /traces    fromId/toId验证   JSON存储
+
+方向查询 → GET /traces?dir=in|out|both → 过滤返回入/出边
+删除操作 → DELETE /traces/{id} → 移除EMF对象 → 文件保存
 ```
 
 ### 3.2 导入导出流程
@@ -601,8 +696,19 @@ frontend/
     <java.version>17</java.version>
     <spring-boot.version>3.2.0</spring-boot.version>
     <emf.version>2.35.0</emf.version>
+    <sirius.emfjson.version>2.5.3</sirius.emfjson.version>
     <!-- 移除PostgreSQL依赖 -->
 </properties>
+
+<dependencies>
+    <!-- EMF JSON支持 - 使用sirius-emfjson替代emfjson-jackson -->
+    <dependency>
+        <groupId>org.eclipse.sirius</groupId>
+        <artifactId>sirius-emfjson</artifactId>
+        <version>${sirius.emfjson.version}</version>
+    </dependency>
+    <!-- 其他依赖... -->
+</dependencies>
 ```
 
 ```json

@@ -2,9 +2,9 @@
 
 ## 文档信息
 
-* **版本** : 1.1
-* **日期** : 2025-01
-* **状态** : MVP接口定稿（对齐架构文档）
+* **版本** : 1.3
+* **日期** : 2025-08-23
+* **状态** : MVP接口定稿（含Trace CRUD + 健康检查实现）
 * **基础URL** : `http://localhost:8080/api/v1`
 * **存储方式** : JSON文件系统
 
@@ -334,7 +334,7 @@ Content-Disposition: attachment; filename="project-{pid}.json"
 
 ### 5.1 查询追溯关系
 
-**GET** `/projects/{pid}/requirements/{id}/traces`
+**GET** `/requirements/{id}/traces`
 
 **查询参数**
 
@@ -366,7 +366,7 @@ Content-Disposition: attachment; filename="project-{pid}.json"
 
 ### 5.2 创建追溯关系
 
-**POST** `/projects/{pid}/requirements/{id}/traces`
+**POST** `/requirements/{id}/traces`
 
 **请求体**
 
@@ -386,6 +386,10 @@ Content-Disposition: attachment; filename="project-{pid}.json"
 
 **响应**
 
+* **新建成功**: `201 Created` + Location header
+* **重复请求**: `200 OK` (REQ-C3-3: 去重逻辑，返回既有对象)
+
+**新建成功响应示例**
 ```json
 {
     "id": "T-003",
@@ -397,9 +401,21 @@ Content-Disposition: attachment; filename="project-{pid}.json"
 }
 ```
 
+**重复请求响应示例 (REQ-C3-3)**
+```json
+{
+    "id": "T-001",
+    "fromId": "R-001", 
+    "toId": "R-003",
+    "type": "derive",
+    "createdAt": "2025-01-15T09:30:00.000Z",
+    "message": "Trace already exists, returning existing object"
+}
+```
+
 ### 5.3 删除追溯关系
 
-**DELETE** `/projects/{pid}/traces/{traceId}`
+**DELETE** `/traces/{traceId}`
 
 **响应**
 
@@ -703,6 +719,54 @@ class SysMLClient {
         return response.json();
     }
     
+    // 新增：Trace CRUD 方法 (REQ-C3-1 到 REQ-C3-4)
+    async getTracesByRequirement(reqId: string, direction: 'in'|'out'|'both' = 'both') {
+        const response = await fetch(
+            `${this.baseUrl}/requirements/${reqId}/traces?dir=${direction}`
+        );
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error.message);
+        }
+        
+        return response.json();
+    }
+    
+    async createTrace(fromId: string, toId: string, type: 'derive'|'satisfy'|'refine'|'trace') {
+        const response = await fetch(
+            `${this.baseUrl}/requirements/${fromId}/traces`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ toId, type })
+            }
+        );
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error.message);
+        }
+        
+        return response.json(); // 返回201 Created 或 200 OK (去重)
+    }
+    
+    async deleteTrace(traceId: string) {
+        const response = await fetch(
+            `${this.baseUrl}/traces/${traceId}`,
+            {
+                method: 'DELETE'
+            }
+        );
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error.message);
+        }
+        
+        // 204 No Content - 无响应体
+    }
+    
     // 新增：检查文件状态
     async checkProjectFiles(projectId: string) {
         const response = await fetch(
@@ -730,13 +794,19 @@ curl -X POST http://localhost:8080/api/v1/projects/proj-001/requirements \
 # 查询需求列表
 curl http://localhost:8080/api/v1/projects/proj-001/requirements?type=definition&page=0&size=20
 
+# 查询追溯关系
+curl http://localhost:8080/api/v1/requirements/R-001/traces?dir=both
+
 # 创建追溯关系
-curl -X POST http://localhost:8080/api/v1/projects/proj-001/requirements/R-001/traces \
+curl -X POST http://localhost:8080/api/v1/requirements/R-001/traces \
   -H "Content-Type: application/json" \
   -d '{
     "toId": "R-002",
     "type": "derive"
   }'
+
+# 删除追溯关系
+curl -X DELETE http://localhost:8080/api/v1/traces/T-001
 
 # 执行静态校验
 curl -X POST http://localhost:8080/api/v1/projects/proj-001/validate/static \

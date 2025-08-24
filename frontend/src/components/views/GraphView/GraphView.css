@@ -1,0 +1,58 @@
+.graph-view-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-view-card .ant-card-body {
+  flex: 1;
+  padding: 0;
+  height: 100%;
+  min-height: 500px;
+}
+
+/* ReactFlow样式调整 */
+.react-flow__renderer {
+  background: #fafafa;
+}
+
+.react-flow__node {
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.react-flow__node:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.react-flow__edge-path {
+  cursor: pointer;
+}
+
+.react-flow__edge-text {
+  font-size: 11px;
+  fill: #666;
+}
+
+/* 控制面板样式 */
+.react-flow__controls {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.react-flow__controls-button {
+  border: none;
+  background: white;
+}
+
+.react-flow__controls-button:hover {
+  background: #f0f0f0;
+}
+
+/* 小地图样式 */
+.react-flow__minimap {
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+}

@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: sysml-mvp-backend-test
+  shell:
+    interactive:
+      enabled: false
+    noninteractive:
+      enabled: false
+
+# server配置已移除，避免路径冲突
+
+# 测试环境配置
+app:
+  data:
+    projects-path: ./target/test-data/projects
+
+# 日志配置
+logging:
+  level:
+    com.sysml.mvp: DEBUG
+    org.eclipse.emf: DEBUG

@@ -70,3 +70,12 @@ out/
 
 # External reference resources (readonly)
 opensource/
+
+# Maven local repository
+backend/.m2/
+
+# Data files
+backend/data/
+data/
+*.log
+*.log.*

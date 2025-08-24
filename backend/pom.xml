@@ -29,6 +29,7 @@
         <emf.version>2.35.0</emf.version>
         <emf.common.version>2.29.0</emf.common.version>
         <emf.ecore.version>2.35.0</emf.ecore.version>
+        <sirius.emfjson.version>2.5.3-SNAPSHOT</sirius.emfjson.version>
         
         <!-- Spring版本 -->
         <spring-boot.version>3.2.0</spring-boot.version>
@@ -61,6 +62,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         
+        <!-- Spring Data Commons (提供Page、Pageable等分页接口) -->
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-commons</artifactId>
+        </dependency>
+        
         <!-- Spring Shell (可选，用于CLI) -->
         <dependency>
             <groupId>org.springframework.shell</groupId>
@@ -87,11 +94,18 @@
             <version>${emf.ecore.version}</version>
         </dependency>
         
-        <!-- EMF JSON支持 -->
+        <!-- EMF JSON支持 - 使用sirius emfjson替代emfjson-jackson -->
         <dependency>
-            <groupId>org.eclipse.emfcloud</groupId>
-            <artifactId>emfjson-jackson</artifactId>
-            <version>2.1.0</version>
+            <groupId>org.eclipse.sirius</groupId>
+            <artifactId>org.eclipse.sirius.emfjson</artifactId>
+            <version>${sirius.emfjson.version}</version>
+        </dependency>
+        
+        <!-- Sirius Components EMF - 提供CrossReferenceAdapter -->
+        <dependency>
+            <groupId>org.eclipse.sirius</groupId>
+            <artifactId>sirius-components-emf</artifactId>
+            <version>2025.8.2</version>
         </dependency>
         
         <!-- Jackson JSON处理 -->
@@ -107,6 +121,12 @@
             <version>${jackson.version}</version>
         </dependency>
         
+        <!-- javax.annotation支持 (PostConstruct等注解) -->
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+
         <!-- 工具库 -->
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -134,12 +154,6 @@
             <version>2.3.0</version>
         </dependency>
         
-        <!-- 文件监控 (用于检测文件变化) -->
-        <dependency>
-            <groupId>commons-io</groupId>
-            <artifactId>commons-io</artifactId>
-            <version>${commons-io.version}</version>
-        </dependency>
         
         <!-- 测试依赖 -->
         <dependency>
@@ -241,6 +255,13 @@
             <id>emfcloud</id>
             <name>EMF Cloud Repository</name>
             <url>https://raw.githubusercontent.com/eclipse-emfcloud/emfcloud-maven/master/</url>
+        </repository>
+        
+        <!-- Sirius EMF JSON仓库 -->
+        <repository>
+            <id>github-sirius-emfjson</id>
+            <name>Sirius EMF JSON - Maven Packages</name>
+            <url>https://maven.pkg.github.com/eclipse-sirius/sirius-emf-json</url>
         </repository>
     </repositories>
 </project>
