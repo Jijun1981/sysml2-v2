@@ -26,6 +26,8 @@ public class RequirementDefinitionDTO {
     @JsonProperty("eClass")
     private String eClass;  // "RequirementDefinition" 或 "RequirementUsage"
     
+    private String type;  // API type: "definition" 或 "usage"
+    
     @NotBlank(message = "reqId不能为空")
     private String reqId;
     

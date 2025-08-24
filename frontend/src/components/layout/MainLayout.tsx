@@ -4,11 +4,10 @@ import { ReloadOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/ic
 import TreeView from '../views/TreeView/TreeView'
 import TableView from '../views/TableView/TableView'
 import GraphView from '../views/GraphView/GraphView'
-import { useModel } from '../../contexts/ModelContext'
+import { useModelContext } from '../../contexts/ModelContext'
 import './MainLayout.css'
 
 const { Header, Content } = Layout
-const { TabPane } = Tabs
 
 /**
  * 主布局组件
@@ -16,18 +15,18 @@ const { TabPane } = Tabs
  */
 const MainLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState('tree')
-  const { loadProject, refresh, loading } = useModel()
+  const { refreshProject, loading } = useModelContext()
   
   useEffect(() => {
-    // 初始加载默认项目
-    loadProject('default').catch(err => {
+    // 初始加载项目数据
+    refreshProject().catch(err => {
       message.error('加载项目失败')
     })
-  }, [loadProject])
+  }, [])
   
   const handleRefresh = async () => {
     try {
-      await refresh()
+      await refreshProject()
       message.success('刷新成功')
     } catch (err) {
       message.error('刷新失败')
@@ -71,17 +70,24 @@ const MainLayout: React.FC = () => {
           onChange={setActiveTab}
           size="large"
           className="view-tabs"
-        >
-          <TabPane tab="树视图" key="tree">
-            <TreeView />
-          </TabPane>
-          <TabPane tab="表视图" key="table">
-            <TableView />
-          </TabPane>
-          <TabPane tab="图视图" key="graph">
-            <GraphView />
-          </TabPane>
-        </Tabs>
+          items={[
+            {
+              key: 'tree',
+              label: '树视图',
+              children: <TreeView />
+            },
+            {
+              key: 'table',
+              label: '表视图',
+              children: <TableView />
+            },
+            {
+              key: 'graph',
+              label: '图视图',
+              children: <GraphView />
+            }
+          ]}
+        />
       </Content>
     </Layout>
   )

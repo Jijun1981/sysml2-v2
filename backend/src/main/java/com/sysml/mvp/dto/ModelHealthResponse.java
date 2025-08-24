@@ -1,5 +1,6 @@
 package com.sysml.mvp.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +16,7 @@ import java.util.List;
 @AllArgsConstructor
 public class ModelHealthResponse {
     private String status;
+    private Integer totalCount;
     private List<PackageInfo> packages;
     private String dataDirectory;
     private Integer projectCount;
@@ -29,5 +31,11 @@ public class ModelHealthResponse {
         private String name;
         private String source;
         private Integer classCount;
+        
+        @JsonProperty("eClassCount")
+        private Integer eClassCount;
+        
+        @JsonProperty("eClasses")
+        private List<String> eClasses;
     }
 }

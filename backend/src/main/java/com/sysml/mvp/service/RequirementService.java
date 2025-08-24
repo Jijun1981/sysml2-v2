@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.emf.ecore.*;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -15,11 +17,17 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
+import org.eclipse.emf.common.util.EList;
 
 /**
  * 需求服务层
  * 实现REQ-C1-1, REQ-C1-2, REQ-C1-3, REQ-C2-1, REQ-C2-2
+ * 
+ * @deprecated 此类已被UniversalElementService替代。
+ * 新代码应使用UniversalElementService和PilotEMFService。
+ * 此类仅为兼容性保留，计划在下个版本删除。
  */
+@Deprecated
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -27,6 +35,10 @@ public class RequirementService {
     
     private final FileModelRepository repository;
     private final EMFModelRegistry modelRegistry;
+    
+    @Autowired
+    private ApplicationContext applicationContext;
+    
     private static final String PROJECT_ID = "default"; // MVP版本使用固定项目ID
     
     /**
@@ -70,7 +82,16 @@ public class RequirementService {
         setEObjectAttribute(definition, "name", request.getName());
         setEObjectAttribute(definition, "text", request.getText());
         setEObjectAttribute(definition, "doc", request.getDoc() != null ? request.getDoc() : "");
-        setEObjectAttribute(definition, "tags", request.getTags() != null ? request.getTags() : List.of());
+        // 处理tags - EMF期望的是EList，需要特殊处理
+        if (request.getTags() != null) {
+            EStructuralFeature tagsFeature = definition.eClass().getEStructuralFeature("tags");
+            if (tagsFeature != null && tagsFeature.isMany()) {
+                @SuppressWarnings("unchecked")
+                EList<String> tagsList = (EList<String>) definition.eGet(tagsFeature);
+                tagsList.clear();
+                tagsList.addAll(request.getTags());
+            }
+        }
         
         // 添加到资源
         resource.getContents().add(definition);
@@ -113,7 +134,16 @@ public class RequirementService {
         if (request.getText() != null && !request.getText().trim().isEmpty()) {
             setEObjectAttribute(usage, "text", request.getText());
         }
-        setEObjectAttribute(usage, "tags", request.getTags() != null ? request.getTags() : List.of());
+        // 处理tags - EMF期望的是EList，需要特殊处理
+        if (request.getTags() != null) {
+            EStructuralFeature tagsFeature = usage.eClass().getEStructuralFeature("tags");
+            if (tagsFeature != null && tagsFeature.isMany()) {
+                @SuppressWarnings("unchecked")
+                EList<String> tagsList = (EList<String>) usage.eGet(tagsFeature);
+                tagsList.clear();
+                tagsList.addAll(request.getTags());
+            }
+        }
         
         // 添加到资源
         resource.getContents().add(usage);
@@ -217,7 +247,13 @@ public class RequirementService {
             setEObjectAttribute(definition, "doc", request.getDoc());
         }
         if (request.getTags() != null) {
-            setEObjectAttribute(definition, "tags", request.getTags());
+            EStructuralFeature tagsFeature = definition.eClass().getEStructuralFeature("tags");
+            if (tagsFeature != null && tagsFeature.isMany()) {
+                @SuppressWarnings("unchecked")
+                EList<String> tagsList = (EList<String>) definition.eGet(tagsFeature);
+                tagsList.clear();
+                tagsList.addAll(request.getTags());
+            }
         }
         
         // 更新时间戳
@@ -254,7 +290,13 @@ public class RequirementService {
             setEObjectAttribute(usage, "status", request.getStatus());
         }
         if (request.getTags() != null) {
-            setEObjectAttribute(usage, "tags", request.getTags());
+            EStructuralFeature tagsFeature = usage.eClass().getEStructuralFeature("tags");
+            if (tagsFeature != null && tagsFeature.isMany()) {
+                @SuppressWarnings("unchecked")
+                EList<String> tagsList = (EList<String>) usage.eGet(tagsFeature);
+                tagsList.clear();
+                tagsList.addAll(request.getTags());
+            }
         }
         
         // 更新时间戳
@@ -306,40 +348,38 @@ public class RequirementService {
     /**
      * REQ-C1-2: 删除需求定义
      */
-    private void deleteDefinition(String id) {
+    public void deleteDefinition(String id) {
+        // TODO: 实现基于Pilot元模型的RequirementDefinition删除
+        throw new UnsupportedOperationException("基于Pilot的RequirementDefinition删除功能待实现");
+        
+        /* 原实现暂时注释
         log.info("删除需求定义: id={}", id);
         
-        // 先获取资源
         Resource resource = repository.loadProject(PROJECT_ID);
-        
-        // 在同一个资源中查找对象
-        EObject definition = resource.getContents().stream()
-            .filter(obj -> {
-                var idFeature = obj.eClass().getEStructuralFeature("id");
-                if (idFeature != null) {
-                    Object value = obj.eGet(idFeature);
-                    return id.equals(value);
-                }
-                return false;
-            })
-            .findFirst()
-            .orElse(null);
+        EObject definition = repository.findById(PROJECT_ID, id);
         
         if (definition == null || !"RequirementDefinition".equals(definition.eClass().getName())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "需求定义不存在: " + id);
         }
         
-        // 检查是否被引用 - 简化版本，暂时不实现复杂的引用检查
-        // TODO: 实现引用检查，如果被Usage引用则返回409
+        // 检查是否被Usage引用
+        List<EObject> usages = repository.findByType(PROJECT_ID, "RequirementUsage");
+        boolean isReferenced = usages.stream()
+                .anyMatch(usage -> id.equals(getEObjectAttribute(usage, "of")));
+        
+        if (isReferenced) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "需求定义被其他需求用法引用，无法删除");
+        }
         
         // 从资源中移除
         boolean removed = resource.getContents().remove(definition);
-        log.debug("从资源中移除对象: removed={}, 剩余对象数={}", removed, resource.getContents().size());
+        log.debug("从资源中移除Definition对象: removed={}, 剩余对象数={}", removed, resource.getContents().size());
         
         // 保存
         repository.saveProject(PROJECT_ID, resource);
         
         log.info("需求定义删除成功: id={}", id);
+        */
     }
     
     /**
@@ -616,6 +656,20 @@ public class RequirementService {
     
     @SuppressWarnings("unchecked")
     private RequirementDefinitionDTO convertToDTO(EObject definition) {
+        // 处理tags字段 - 可能是EList或List
+        Object tagsObj = getEObjectAttribute(definition, "tags");
+        List<String> tags = null;
+        if (tagsObj instanceof List) {
+            tags = (List<String>) tagsObj;
+        } else if (tagsObj instanceof EList) {
+            tags = new ArrayList<>((EList<String>) tagsObj);
+        } else if (tagsObj != null) {
+            // 如果是其他类型，尝试转换为String再包装成List
+            tags = Arrays.asList(tagsObj.toString());
+        } else {
+            tags = new ArrayList<>();
+        }
+        
         return RequirementDefinitionDTO.builder()
                 .id((String) getEObjectAttribute(definition, "id"))
                 .eClass("RequirementDefinition")
@@ -623,7 +677,7 @@ public class RequirementService {
                 .name((String) getEObjectAttribute(definition, "name"))
                 .text((String) getEObjectAttribute(definition, "text"))
                 .doc((String) getEObjectAttribute(definition, "doc"))
-                .tags((List<String>) getEObjectAttribute(definition, "tags"))
+                .tags(tags)
                 .version((String) getEObjectAttribute(definition, "_version"))
                 .createdAt(convertToInstant((Date) getEObjectAttribute(definition, "createdAt")))
                 .updatedAt(convertToInstant((Date) getEObjectAttribute(definition, "updatedAt")))
@@ -635,6 +689,19 @@ public class RequirementService {
      */
     @SuppressWarnings("unchecked")
     private RequirementDefinitionDTO convertUsageToDTO(EObject usage) {
+        // 处理tags字段 - 可能是EList或List
+        Object tagsObj = getEObjectAttribute(usage, "tags");
+        List<String> tags = null;
+        if (tagsObj instanceof List) {
+            tags = (List<String>) tagsObj;
+        } else if (tagsObj instanceof EList) {
+            tags = new ArrayList<>((EList<String>) tagsObj);
+        } else if (tagsObj != null) {
+            tags = Arrays.asList(tagsObj.toString());
+        } else {
+            tags = new ArrayList<>();
+        }
+        
         return RequirementDefinitionDTO.builder()
                 .id((String) getEObjectAttribute(usage, "id"))
                 .eClass("RequirementUsage")
@@ -642,7 +709,7 @@ public class RequirementService {
                 .name((String) getEObjectAttribute(usage, "name"))
                 .text((String) getEObjectAttribute(usage, "text"))
                 .status((String) getEObjectAttribute(usage, "status"))
-                .tags((List<String>) getEObjectAttribute(usage, "tags"))
+                .tags(tags)
                 .version((String) getEObjectAttribute(usage, "_version"))
                 .createdAt(convertToInstant((Date) getEObjectAttribute(usage, "createdAt")))
                 .updatedAt(convertToInstant((Date) getEObjectAttribute(usage, "updatedAt")))
@@ -677,5 +744,133 @@ public class RequirementService {
     
     private Instant convertToInstant(Date date) {
         return date != null ? date.toInstant() : null;
+    }
+    
+    // 为测试添加的公共方法
+    
+    /**
+     * REQ-C1-2 & REQ-C2-2: PATCH部分更新需求
+     * 使用PATCH语义，只更新提供的字段
+     */
+    public RequirementDefinitionDTO patchRequirement(String id, Map<String, Object> patchData) {
+        log.info("PATCH更新需求: id={}, fields={}", id, patchData.keySet());
+        
+        // 查找需求对象
+        EObject requirement = repository.findById(PROJECT_ID, id);
+        if (requirement == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "需求不存在: " + id);
+        }
+        
+        // 获取PilotEMFService
+        PilotEMFService pilotService = applicationContext.getBean(PilotEMFService.class);
+        
+        // 将API字段映射到Pilot字段
+        Map<String, Object> modelPatchData = new HashMap<>();
+        for (Map.Entry<String, Object> entry : patchData.entrySet()) {
+            String apiField = entry.getKey();
+            Object value = entry.getValue();
+            
+            // API到Model的字段映射
+            switch (apiField) {
+                case "name":
+                    modelPatchData.put("declaredName", value);
+                    break;
+                case "reqId":
+                    modelPatchData.put("declaredShortName", value);
+                    break;
+                case "text":
+                    // text需要特殊处理为documentation
+                    if (value != null) {
+                        modelPatchData.put("documentation", value);
+                    }
+                    break;
+                case "status":
+                    modelPatchData.put("status", value);
+                    break;
+                case "tags":
+                    modelPatchData.put("tags", value);
+                    break;
+                // 忽略不应修改的字段
+                case "id":
+                case "type":
+                case "of":
+                case "eClass":
+                case "createdAt":
+                    log.trace("忽略只读字段: {}", apiField);
+                    break;
+                default:
+                    // 未知字段直接传递（让mergeAttributes处理）
+                    modelPatchData.put(apiField, value);
+            }
+        }
+        
+        // 使用PilotEMFService的mergeAttributes进行部分更新
+        pilotService.mergeAttributes(requirement, modelPatchData);
+        
+        // 更新时间戳（不需要手动更新，mergeAttributes应该处理）
+        // 如果需要强制更新时间戳，可以这样：
+        // pilotService.setAttributeIfExists(requirement, "updatedAt", Date.from(Instant.now()));
+        
+        // 保存更新
+        Resource resource = requirement.eResource();
+        if (resource != null) {
+            repository.saveProject(PROJECT_ID, resource);
+        }
+        
+        // 转换为DTO返回
+        return convertToDTO(requirement);
+    }
+    
+    /**
+     * 创建需求定义 - 基于Pilot元模型
+     */
+    public RequirementDefinitionDTO createDefinition(RequirementDefinitionDTO dto) {
+        log.info("创建RequirementDefinition(Pilot): reqId={}, name={}", dto.getReqId(), dto.getName());
+        
+        // 输入验证
+        if (dto.getReqId() == null || dto.getReqId().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "reqId不能为空");
+        }
+        if (dto.getName() == null || dto.getName().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "name不能为空");
+        }
+        if (dto.getText() == null || dto.getText().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "text不能为空");
+        }
+        
+        // 使用PilotEMFService创建
+        PilotEMFService pilotService = applicationContext.getBean(PilotEMFService.class);
+        EObject reqDef = pilotService.createRequirementDefinition(dto.getReqId(), dto.getName(), dto.getText());
+        
+        // 转换为DTO返回
+        RequirementDefinitionDTO result = new RequirementDefinitionDTO();
+        result.setId((String) pilotService.getAttributeValue(reqDef, "elementId"));
+        result.setEClass("RequirementDefinition");
+        result.setType("definition");
+        result.setReqId(dto.getReqId());
+        result.setName(dto.getName());
+        result.setText(dto.getText());
+        result.setCreatedAt(Instant.now());
+        result.setUpdatedAt(Instant.now());
+        
+        log.info("成功创建RequirementDefinition: id={}", result.getId());
+        return result;
+    }
+    
+    /**
+     * 更新需求定义 - 用于测试
+     */
+    public RequirementDefinitionDTO updateDefinition(String id, RequirementDefinitionDTO dto) {
+        // TODO: 实现基于Pilot元模型的RequirementDefinition更新
+        throw new UnsupportedOperationException("基于Pilot的RequirementDefinition更新功能待实现");
+    }
+    
+    
+    /**
+     * 根据ID获取需求定义 - 用于测试
+     */
+    public RequirementDefinitionDTO getDefinitionById(String id) {
+        // TODO: 实现基于Pilot元模型的RequirementDefinition查询
+        throw new UnsupportedOperationException("基于Pilot的RequirementDefinition查询功能待实现");
     }
 }

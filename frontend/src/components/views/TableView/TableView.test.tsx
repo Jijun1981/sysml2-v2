@@ -2,12 +2,21 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import TableView from './TableView'
-import { useModel } from '../../../contexts/ModelContext'
+import { ModelProvider } from '../../../contexts/ModelContext'
 import '@testing-library/jest-dom'
+import type { ElementData } from '../../../services/universalApi'
 
-// Mock ModelContext
-vi.mock('../../../contexts/ModelContext', () => ({
-  useModel: vi.fn()
+// Mock only the API layer, let ModelContext run normally
+vi.mock('../../../services/universalApi', () => ({
+  createUniversalElement: vi.fn(),
+  queryElementsByType: vi.fn(),
+  queryAllElements: vi.fn(),
+  getElementById: vi.fn(),
+  updateUniversalElement: vi.fn(),
+  deleteUniversalElement: vi.fn(),
+  setProjectId: vi.fn(),
+  handleUniversalApiError: vi.fn(),
+  default: vi.fn()
 }))
 
 describe('TableView Component', () => {
@@ -40,20 +49,11 @@ describe('TableView Component', () => {
   })
 
   it('应该正确渲染需求表格', () => {
-    const mockUseModel = {
-      requirements: mockRequirements,
-      usages: [],
-      traces: [],
-      selectedId: null,
-      selectElement: mockSelectElement,
-      deleteRequirement: mockDeleteRequirement,
-      loading: false,
-      error: null
-    }
-    
-    ;(useModel as any).mockReturnValue(mockUseModel)
-
-    render(<TableView />)
+    render(
+      <TestWrapper>
+        <TableView />
+      </TestWrapper>
+    )
 
     // 验证表头
     expect(screen.getByText('ID')).toBeInTheDocument()

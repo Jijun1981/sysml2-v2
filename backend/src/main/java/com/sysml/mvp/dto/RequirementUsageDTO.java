@@ -20,6 +20,10 @@ public class RequirementUsageDTO {
     
     private String id;
     
+    private String eClass; // EMF eClass name for type identification
+    
+    private String type; // API type (usage)
+    
     private String of; // reference to RequirementDefinition id
     
     private String name;

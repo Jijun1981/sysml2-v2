@@ -4,9 +4,17 @@ import GraphView from './GraphView'
 import { useModel } from '../../../contexts/ModelContext'
 import '@testing-library/jest-dom'
 
-// Mock ModelContext
-vi.mock('../../../contexts/ModelContext', () => ({
-  useModel: vi.fn()
+// Mock only the API layer, let ModelContext run normally
+vi.mock('../../../services/universalApi', () => ({
+  createUniversalElement: vi.fn(),
+  queryElementsByType: vi.fn(),
+  queryAllElements: vi.fn(),
+  getElementById: vi.fn(),
+  updateUniversalElement: vi.fn(),
+  deleteUniversalElement: vi.fn(),
+  setProjectId: vi.fn(),
+  handleUniversalApiError: vi.fn(),
+  default: vi.fn()
 }))
 
 // Mock ReactFlow

@@ -17,17 +17,23 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 需求管理控制器
  * 实现 REQ-C1-1, REQ-C1-2, REQ-C1-3, REQ-C2-1, REQ-C2-2
+ * 
+ * @deprecated 此控制器已被UniversalElementController替代。
+ * 新的API路径：/api/v1/elements
+ * 此类仅为兼容性保留，计划在下个版本删除。
  */
+@Deprecated
 @Slf4j
 @RestController
 @RequestMapping("/requirements")
 @RequiredArgsConstructor
 @Validated
-@Tag(name = "Requirements", description = "需求管理API")
+@Tag(name = "Requirements (Deprecated)", description = "需求管理API - 已废弃，请使用UniversalElementController")
 public class RequirementController {
     
     private final RequirementService requirementService;
@@ -95,6 +101,27 @@ public class RequirementController {
         log.info("更新需求: id={}", id);
         
         RequirementDefinitionDTO updated = requirementService.updateRequirement(id, request);
+        return ResponseEntity.ok(updated);
+    }
+    
+    /**
+     * REQ-C1-2 & REQ-C2-2: PATCH部分更新需求
+     * AC: PATCH /api/v1/requirements/{id} 部分更新，仅修改请求体中提供的字段，其他字段保持不变
+     */
+    @PatchMapping("/{id}")
+    @Operation(summary = "部分更新需求", description = "使用PATCH方式部分更新需求，只修改提供的字段")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "更新成功"),
+        @ApiResponse(responseCode = "404", description = "需求不存在"),
+        @ApiResponse(responseCode = "400", description = "参数错误")
+    })
+    public ResponseEntity<RequirementDefinitionDTO> patchRequirement(
+            @Parameter(description = "需求ID") @PathVariable String id,
+            @RequestBody Map<String, Object> patchData) {
+        
+        log.info("PATCH更新需求: id={}, fields={}", id, patchData.keySet());
+        
+        RequirementDefinitionDTO updated = requirementService.patchRequirement(id, patchData);
         return ResponseEntity.ok(updated);
     }
     

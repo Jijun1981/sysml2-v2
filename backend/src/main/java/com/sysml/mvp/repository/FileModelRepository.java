@@ -92,7 +92,7 @@ public class FileModelRepository {
         resourceSet.getResourceFactoryRegistry().getProtocolToFactoryMap().put("urn", factory);
         
         // 注册本地SysML EPackage
-        EPackage sysmlPackage = modelRegistry.getSysmlPackage();
+        EPackage sysmlPackage = modelRegistry.getSysMLPackage();
         if (sysmlPackage != null) {
             resourceSet.getPackageRegistry().put(sysmlPackage.getNsURI(), sysmlPackage);
             resourceSet.getPackageRegistry().put("", sysmlPackage);  // 支持fragment-only引用
@@ -112,7 +112,8 @@ public class FileModelRepository {
         ResourceSet resourceSet = resourceCache.computeIfAbsent(projectId, 
             k -> createConfiguredResourceSet());
         
-        URI uri = URI.createFileURI(projectPath.toString());
+        // 使用绝对路径创建URI
+        URI uri = URI.createFileURI(projectPath.toAbsolutePath().toString());
         JsonResource resource = createJsonResource(uri, resourceSet);
         
         if (!Files.exists(projectPath)) {

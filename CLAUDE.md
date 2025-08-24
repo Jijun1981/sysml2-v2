@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Graph Visualization**: React Flow for dependency visualization
 
 ### Core Components
-- **EMF Model Registry**: 本地SysML2子集元模型，包含3个核心类（RequirementDefinition, RequirementUsage, Trace）
+- **EMF Model Registry**: 从SysML Pilot项目注册标准元模型，包含3个核心类（RequirementDefinition, RequirementUsage, Trace），保持Pilot的完整继承结构
 - **File System Storage**: JSON文件存储，每个项目对应一个model.json文件，使用EMF原生JSON格式
 - **Three-View Sync**: 树视图、表视图、图视图的数据联动机制
 
@@ -65,7 +65,7 @@ frontend/
 ## Key Design Principles
 
 - **Single Source of Truth (SSOT)**: EMF Resource作为唯一数据源
-- **Zero Pilot Dependency**: 不依赖SysML Pilot实现，使用本地元模型
+- **Pilot Metamodel Registration**: 从SysML Pilot项目注册标准元模型，使用相同的命名空间和EClass结构
 - **Performance Targets**: 支持≤500节点模型，API响应<500ms
 - **Validation Rules**: 实现3个核心校验规则（reqId唯一性、循环依赖、悬挂引用）
 
@@ -80,7 +80,7 @@ frontend/
 ## Development Notes
 
 1. **EMF Integration**: 项目使用Eclipse Modeling Framework进行模型定义和序列化
-2. **No External Dependencies**: 明确声明不依赖org.omg.sysml或Pilot实现，也不依赖PostgreSQL等外部数据库
+2. **Pilot Metamodel**: 从SysML Pilot项目注册元模型到EMF Registry，使用标准命名空间https://www.omg.org/spec/SysML/20240201
 3. **JSON File Storage**: 使用本地JSON文件存储模型数据，文件路径：data/projects/{projectId}/model.json
 4. **Static Validation**: 硬编码实现3条核心校验规则，不采用动态规则引擎
 5. **File Import/Export**: 支持JSON格式的项目导入导出，文件名格式：project-{pid}.json
@@ -102,9 +102,9 @@ frontend/
 ### 2025-08-23 开发记录
 
 1. **EMF集成方案**：
-   - 使用本地 `urn:your:sysml2` 命名空间，避免外部依赖
+   - 从Pilot项目注册标准 `https://www.omg.org/spec/SysML/20240201` 命名空间
    - 创建自定义 `SysMLResourceFactory` 处理所有URI协议
-   - 注册简化的3个EClass：RequirementDefinition, RequirementUsage, Trace
+   - 注册Pilot完整的EClass继承层次：Element→NamedElement→Feature→Type→Classifier→Definition→RequirementDefinition
 
 2. **JSON序列化问题及解决**：
    - **问题**：EMF Jackson库与Spring Boot Jackson版本冲突导致循环引用

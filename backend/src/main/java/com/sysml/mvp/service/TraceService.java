@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.emf.ecore.*;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -18,7 +20,12 @@ import java.util.stream.Collectors;
 /**
  * Trace服务层
  * 实现REQ-C3-1到REQ-C3-4
+ * 
+ * @deprecated 此类已被UniversalElementService替代。
+ * 追溯关系现在通过UniversalElementService创建Dependency类型实现。
+ * 此类仅为兼容性保留，计划在下个版本删除。
  */
+@Deprecated
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -26,6 +33,10 @@ public class TraceService {
     
     private final FileModelRepository repository;
     private final EMFModelRegistry modelRegistry;
+    
+    @Autowired
+    private ApplicationContext applicationContext;
+    
     private static final String PROJECT_ID = "default"; // MVP版本使用固定项目ID
     
     /**
@@ -261,5 +272,65 @@ public class TraceService {
         return traces.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
+    }
+    
+    /**
+     * 创建Trace - 基于Pilot元模型（映射到Dependency）
+     */
+    public TraceDTO createTrace(TraceDTO dto) {
+        log.info("创建Trace(Pilot Dependency): from={}, to={}, type={}", 
+                dto.getFromId(), dto.getToId(), dto.getType());
+        
+        // 输入验证
+        if (dto.getFromId() == null || dto.getFromId().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fromId不能为空");
+        }
+        if (dto.getToId() == null || dto.getToId().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "toId不能为空");
+        }
+        if (dto.getType() == null || dto.getType().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "type不能为空");
+        }
+        
+        // 验证fromId != toId
+        if (dto.getFromId().equals(dto.getToId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fromId和toId不能相同");
+        }
+        
+        // 获取PilotEMFService
+        PilotEMFService pilotService = applicationContext.getBean(PilotEMFService.class);
+        
+        // 使用PilotEMFService创建Dependency
+        EObject dependency = pilotService.createTraceDependency(
+            dto.getFromId(),
+            dto.getToId(),
+            dto.getType()
+        );
+        
+        // 转换为DTO返回
+        TraceDTO result = TraceDTO.builder()
+            .id((String) pilotService.getAttributeValue(dependency, "elementId"))
+            .fromId(dto.getFromId())
+            .toId(dto.getToId())
+            .type(dto.getType())
+            .createdAt(Instant.now())
+            .build();
+        
+        log.info("成功创建Trace(Dependency): id={}", result.getId());
+        return result;
+    }
+    
+    /**
+     * 根据方向获取Trace
+     */
+    public List<TraceDTO> getTracesByDirection(String requirementId, String direction) {
+        return getTracesByRequirement(requirementId, direction);
+    }
+    
+    /**
+     * 根据ID获取Trace
+     */
+    public TraceDTO getTraceById(String traceId) {
+        return getTrace(traceId);
     }
 }

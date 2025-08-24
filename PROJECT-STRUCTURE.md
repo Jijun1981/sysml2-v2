@@ -1,6 +1,107 @@
 # SysML v2 MVP 项目结构规范
 
-## 📁 实际目录结构
+## 🔄 代码重构计划（Pilot元模型迁移）
+
+### 重构策略决策
+- **目标**：从自定义元模型迁移到完整SysML Pilot元模型
+- **原则**：重写比改造快，保留可用基础设施
+- **风险控制**：保留测试框架和数据文件
+
+### 🟢 保留重用（基础设施）
+```
+backend/src/main/java/com/sysml/mvp/
+├── controller/                    # ✅ REST控制器框架可重用
+│   ├── HealthController.java      # ✅ 健康检查逻辑基本不变
+│   └── ProjectController.java     # ✅ 导入导出框架可重用
+├── dto/                          # ✅ DTO框架可重用，调整映射
+│   ├── HealthResponse.java       # ✅ 完全保留
+│   ├── ModelHealthResponse.java  # ✅ 调整返回nsURI
+│   ├── GraphDataDTO.java         # ✅ 图数据结构不变
+│   ├── GraphEdgeDTO.java         # ✅ 图边结构不变
+│   ├── GraphNodeDTO.java         # ✅ 图节点结构不变
+│   ├── TableRowDTO.java          # ✅ 表格行结构基本不变
+│   └── TreeNodeDTO.java          # ✅ 树节点结构基本不变
+├── exception/                    # ✅ 全局异常处理保留
+│   └── GlobalExceptionHandler.java
+├── util/                         # ✅ 工具类保留
+│   ├── DemoDataGenerator.java    # ✅ 调整生成逻辑即可
+│   └── EObjectSerializer.java    # ✅ JSON序列化工具保留
+├── command/                      # ✅ 命令模式框架保留
+│   └── DataGenerationCommand.java
+└── Application.java              # ✅ Spring Boot启动类保留
+```
+
+### 🟡 重构调整（逻辑改动）
+```
+backend/src/main/java/com/sysml/mvp/
+├── model/                        # 🔄 EMF注册需要重写
+│   └── EMFModelRegistry.java     # 🔄 改为加载完整Pilot.ecore
+├── repository/                   # 🔄 查询逻辑需要调整
+│   └── FileModelRepository.java  # 🔄 改用getAllContents()遍历
+├── service/                      # 🔄 服务层需要改为动态EMF
+│   ├── RequirementService.java   # 🔄 改用eSet/eGet动态操作
+│   ├── TraceService.java         # 🔄 Trace→Dependency映射
+│   ├── ViewService.java          # 🔄 视图数据组装逻辑
+│   └── ProjectService.java       # 🔄 项目管理逻辑调整
+├── dto/                          # 🔄 DTO映射字段调整
+│   ├── RequirementDefinitionDTO.java  # 🔄 reqId→declaredShortName
+│   ├── RequirementUsageDTO.java       # 🔄 映射到Usage字段
+│   └── TraceDTO.java                  # 🔄 映射到Dependency
+└── controller/                   # 🔄 控制器路径和逻辑调整
+    ├── ApiController.java        # 🔄 数据初始化API调整
+    ├── RequirementController.java # 🔄 REST路径统一/api/v1
+    ├── TraceController.java      # 🔄 Trace→Dependency概念映射
+    └── ViewController.java       # 🔄 三视图API数据格式
+```
+
+### 🔴 删除重写（核心变更）
+```
+backend/src/test/                 # ❌ 测试需要重写
+├── 现有测试基于旧元模型          # ❌ 删除所有基于自定义模型的测试
+└── 需重写为Pilot元模型测试       # 🆕 基于动态EMF的新测试
+
+data/                            # ❌ 现有数据文件格式不兼容
+├── demo-project.json            # ❌ 基于旧模型的数据
+├── small/medium/large-project.json # ❌ 删除重新生成
+└── projects/default/model.json  # ❌ 旧格式数据
+
+建议删除文件：
+- backend/src/test/java/com/sysml/mvp/**/*Test.java (所有测试)
+- backend/data/** (所有旧数据)
+- 保留测试框架配置: application-test.yml, vite.config.test.ts
+```
+
+### 📋 迁移任务清单
+
+#### Phase 1: 基础设施重构 (2小时)
+- [ ] EMFModelRegistry加载完整Pilot.ecore
+- [ ] FileModelRepository改用getAllContents()
+- [ ] 健康检查接口返回nsURI摘要
+
+#### Phase 2: 服务层重构 (4小时)  
+- [ ] RequirementService改为动态EMF操作
+- [ ] TraceService实现Trace→Dependency映射
+- [ ] ViewService适配新的数据结构
+- [ ] DTO映射调整字段关系
+
+#### Phase 3: 控制器重构 (2小时)
+- [ ] 统一REST路径为/api/v1
+- [ ] 添加PATCH语义支持
+- [ ] 错误响应格式统一
+
+#### Phase 4: 测试重写 (4小时)
+- [ ] 删除所有旧测试
+- [ ] 重写基于Pilot元模型的单元测试
+- [ ] 集成测试覆盖核心流程
+
+#### Phase 5: 数据重建 (1小时)
+- [ ] 删除旧数据文件
+- [ ] 重新生成demo/small/medium/large数据集
+- [ ] 验证导入导出功能
+
+**总预估工作量: 13小时**
+
+## 📁 目标目录结构（重构后）
 
 ```
 sysml2-v2/

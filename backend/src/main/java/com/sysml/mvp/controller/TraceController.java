@@ -21,12 +21,17 @@ import java.util.List;
 /**
  * Trace关系管理控制器
  * 实现 REQ-C3-1, REQ-C3-2, REQ-C3-3, REQ-C3-4
+ * 
+ * @deprecated 此控制器已被UniversalElementController替代。
+ * 追溯关系现在通过创建Dependency类型实现：/api/v1/elements
+ * 此类仅为兼容性保留，计划在下个版本删除。
  */
+@Deprecated
 @Slf4j
 @RestController
 @RequiredArgsConstructor
 @Validated
-@Tag(name = "Traces", description = "Trace关系管理API")
+@Tag(name = "Traces (Deprecated)", description = "Trace关系管理API - 已废弃，请使用UniversalElementController")
 public class TraceController {
     
     private final TraceService traceService;
