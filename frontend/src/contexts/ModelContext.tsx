@@ -334,6 +334,11 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
     await loadAllElements()
   }, [loadAllElements])
 
+  // 初始化时加载数据
+  useEffect(() => {
+    loadAllElements()
+  }, []) // 只在组件挂载时执行一次
+
   // 视图投影：树视图数据
   const getTreeViewData = useCallback((): TreeViewData => {
     const definitions = Object.values(elements)

@@ -319,10 +319,12 @@ public class UniversalElementService {
         }
         
         // 如果没有elementId，使用URI fragment
-        if (obj.eResource() != null) {
-            return obj.eResource().getURIFragment(obj);
+        Resource resource = obj.eResource();
+        if (resource != null && resource.getURI() != null) {
+            return resource.getURIFragment(obj);
         }
         
-        return obj.toString();
+        // 最后的备选：使用hashCode
+        return "obj-" + Integer.toHexString(obj.hashCode());
     }
 }

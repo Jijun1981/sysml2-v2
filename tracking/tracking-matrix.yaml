@@ -5,10 +5,10 @@
 
 metadata:
   project: SysML v2 MVP
-  version: "0.4.0-Universal"
+  version: "0.4.1-Universal"
   created: "2025-01-15"
-  updated: "2025-08-24T18:00:00Z"
-  status: "通用接口架构迁移完成"
+  updated: "2025-08-25T08:40:00Z"
+  status: "通用接口验证与SSOT修复"
   architecture_status:
     current: "Universal Element Interface Architecture"
     description: "单一通用接口处理182个SysML类型，零代码扩展能力"
@@ -258,9 +258,16 @@ requirements:
     story: STORY-A1
     title: "数据源唯一"
     acceptance_criteria: "Given 系统运行，When 任一视图对对象创建/更新，Then 另两视图在不刷新情况下看到同一id的同步变更"
-    status: "待开发"
-    code_files: []
-    test_cases: []
+    status: "部分实现"
+    code_files: [
+      backend/src/main/java/com/sysml/mvp/service/UniversalElementService.java,
+      frontend/src/contexts/ModelContext.tsx
+    ]
+    test_cases: [TEST-A1-1-02]
+    issues:
+      - "EMF Resource URI为null导致500错误"
+      - "需要修复getObjectId方法处理null resource"
+    validation_status: "通用接口路径验证通过 - 2025-08-25"
     
   - id: REQ-A1-2
     story: STORY-A1
@@ -896,6 +903,22 @@ test_cases:
     title: "测试三视图数据同步"
     file: frontend/src/__tests__/ViewSync.test.tsx
     status: "待开发"
+    
+  - id: TEST-A1-1-02
+    requirement: REQ-A1-1
+    type: integration
+    title: "通用接口SSOT测试"
+    file: backend/src/test/java/com/sysml/mvp/service/UniversalSSOTTest.java
+    status: "已创建"
+    description: "验证通用接口支持所有元素类型的CRUD和SSOT同步"
+    test_scenarios:
+      - "验证通用接口可以创建和查询RequirementDefinition"
+      - "验证通用接口可以创建和查询RequirementUsage"
+      - "验证通用接口可以创建和查询PartUsage"
+      - "验证通用接口可以创建追溯关系（Satisfy）"
+      - "验证通用接口支持查询所有类型"
+      - "验证Demo数据可以通过通用接口访问"
+      - "REQ-A1-1: 验证SSOT - 更新后所有视图看到同步变更"
     
   - id: TEST-A2-ALL-01
     requirements: [REQ-A2-1, REQ-A2-2]
