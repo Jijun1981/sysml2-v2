@@ -178,7 +178,8 @@ const GraphView: React.FC = () => {
     if (params.source && params.target) {
       try {
         // 创建Satisfy关系（可以根据需要选择其他类型）
-        const newDependency = await createElement('Satisfy', {
+        const newDependency = await createElement({
+          eClass: 'Satisfy',
           source: params.source,
           target: params.target
         })
