@@ -117,13 +117,77 @@ public class UniversalElementService {
     private void addElementsToResult(EObject obj, String type, List<Map<String, Object>> result) {
         // 如果指定了类型，过滤
         if (type == null || type.isEmpty() || obj.eClass().getName().equals(type)) {
-            result.add(eObjectToMap(obj));
+            result.add(eObjectToMapWithHierarchy(obj));
         }
         
-        // 递归处理子元素
-        for (EObject child : obj.eContents()) {
-            addElementsToResult(child, type, result);
+        // 不再递归处理子元素 - 层次结构现在由eObjectToMapWithHierarchy处理
+        // 这样可以保持父子包含关系
+    }
+    
+    /**
+     * 将EObject转换为Map，保持层次结构（内嵌子对象）
+     */
+    private Map<String, Object> eObjectToMapWithHierarchy(EObject obj) {
+        Map<String, Object> map = new HashMap<>();
+        
+        // 添加eClass信息
+        map.put("eClass", obj.eClass().getName());
+        map.put("eclass", obj.eClass().getName()); // 兼容性
+        
+        // 遍历所有属性
+        for (EStructuralFeature feature : obj.eClass().getEAllStructuralFeatures()) {
+            try {
+                if (!feature.isDerived() && obj.eIsSet(feature)) {
+                    String name = feature.getName();
+                    Object value = obj.eGet(feature);
+                    
+                    // 处理不同类型的值
+                    if (value == null) {
+                        map.put(name, null);
+                    } else if (value instanceof EList) {
+                        // EMF List类型 - 对于包含特性(containment)，内嵌完整对象
+                        EList<?> eList = (EList<?>) value;
+                        List<Object> list = new ArrayList<>();
+                        for (Object item : eList) {
+                            if (item instanceof EObject) {
+                                EObject childObj = (EObject) item;
+                                // 对于包含关系（如ownedFeature），递归内嵌完整对象
+                                if (feature instanceof org.eclipse.emf.ecore.EReference && 
+                                    ((org.eclipse.emf.ecore.EReference) feature).isContainment()) {
+                                    list.add(eObjectToMapWithHierarchy(childObj));
+                                } else {
+                                    // 对于引用关系，使用$ref
+                                    list.add(Map.of("$ref", getObjectId(childObj)));
+                                }
+                            } else {
+                                list.add(item);
+                            }
+                        }
+                        map.put(name, list);
+                    } else if (value instanceof EObject) {
+                        EObject childObj = (EObject) value;
+                        // 对于包含关系，内嵌完整对象；对于引用关系，使用ID
+                        if (feature instanceof org.eclipse.emf.ecore.EReference && 
+                            ((org.eclipse.emf.ecore.EReference) feature).isContainment()) {
+                            map.put(name, eObjectToMapWithHierarchy(childObj));
+                        } else {
+                            map.put(name, getObjectId(childObj));
+                        }
+                    } else if (value instanceof Enum) {
+                        // 枚举类型
+                        map.put(name, value.toString());
+                    } else {
+                        // 基本类型
+                        map.put(name, value);
+                    }
+                }
+            } catch (Exception e) {
+                // 忽略无法访问的属性
+                System.err.println("Failed to get feature " + feature.getName() + ": " + e.getMessage());
+            }
         }
+        
+        return map;
     }
     
     /**
