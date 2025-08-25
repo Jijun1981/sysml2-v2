@@ -32,16 +32,16 @@ export interface ApiError {
 }
 
 // 通用接口客户端类
-class UniversalApiClient {
+export class UniversalApiClient {
   private client: AxiosInstance
+  private projectId: string = 'default'  // 存储当前projectId
 
   constructor() {
     this.client = axios.create({
       baseURL: 'http://localhost:8080/api/v1',
       timeout: 30000,
       headers: {
-        'Content-Type': 'application/json',
-        'X-Project-Id': 'default' // 项目作用域，基于需求文档约定
+        'Content-Type': 'application/json'
       }
     })
 
@@ -59,11 +59,11 @@ class UniversalApiClient {
    * POST /api/v1/elements {eClass, attributes}
    */
   async createElement(eClass: string, attributes: Record<string, any>): Promise<ElementData> {
-    const { data } = await this.client.post('/elements', {
+    const { data } = await this.client.post(`/elements?projectId=${this.projectId}`, {
       eClass,
-      attributes
+      ...attributes  // 直接传递属性，不嵌套
     })
-    return data.data
+    return data  // 后端直接返回元素对象
   }
 
   /**
@@ -83,11 +83,13 @@ class UniversalApiClient {
   ): Promise<QueryResponse<ElementData>> {
     const { data } = await this.client.get('/elements', {
       params: {
+        projectId: this.projectId,
         type: eClass,
         ...params
       }
     })
-    return data
+    // 直接返回数组，不是包装的响应
+    return { data: data || [], meta: { page: 0, size: 100, total: data?.length || 0 }, timestamp: new Date().toISOString() }
   }
 
   /**
@@ -99,8 +101,14 @@ class UniversalApiClient {
     expand?: string
     fields?: string
   }): Promise<QueryResponse<ElementData>> {
-    const { data } = await this.client.get('/elements', { params })
-    return data
+    const { data } = await this.client.get('/elements', { 
+      params: {
+        projectId: this.projectId,
+        ...params
+      }
+    })
+    // 直接返回数组，不是包装的响应
+    return { data: data || [], meta: { page: 0, size: 100, total: data?.length || 0 }, timestamp: new Date().toISOString() }
   }
 
   /**
@@ -109,9 +117,9 @@ class UniversalApiClient {
    */
   async getElementById(id: string, expand?: string): Promise<ElementData> {
     const { data } = await this.client.get(`/elements/${id}`, {
-      params: expand ? { expand } : {}
+      params: { projectId: this.projectId, ...(expand ? { expand } : {}) }
     })
-    return data.data
+    return data  // 后端直接返回元素对象
   }
 
   /**
@@ -119,8 +127,8 @@ class UniversalApiClient {
    * PATCH /api/v1/elements/{id} {attributes}
    */
   async updateElement(id: string, attributes: Record<string, any>): Promise<ElementData> {
-    const { data } = await this.client.patch(`/elements/${id}`, attributes)
-    return data.data
+    const { data } = await this.client.patch(`/elements/${id}?projectId=${this.projectId}`, attributes)
+    return data  // 后端直接返回元素对象
   }
 
   /**
@@ -128,7 +136,7 @@ class UniversalApiClient {
    * DELETE /api/v1/elements/{id}
    */
   async deleteElement(id: string): Promise<void> {
-    await this.client.delete(`/elements/${id}`)
+    await this.client.delete(`/elements/${id}?projectId=${this.projectId}`)
   }
 
   /**
@@ -163,7 +171,7 @@ class UniversalApiClient {
    * 设置项目ID（支持多项目切换）
    */
   setProjectId(projectId: string) {
-    this.client.defaults.headers['X-Project-Id'] = projectId
+    this.projectId = projectId
   }
 
   /**

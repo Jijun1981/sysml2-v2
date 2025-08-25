@@ -139,7 +139,22 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
     setLoading(true)
     setError(null)
     try {
-      const newElement = await createUniversalElement(eClass, attributes)
+      const response = await createUniversalElement(eClass, attributes)
+      const id = response.elementId || response.id
+      const newElement: ElementData = {
+        ...response,
+        id: id,
+        eClass: response.eClass,
+        attributes: {
+          declaredName: response.declaredName,
+          declaredShortName: response.declaredShortName,
+          of: response.of,
+          source: response.source,
+          target: response.target,
+          status: response.status || 'active',
+          ...response
+        }
+      }
       setElementsState(prev => ({
         ...prev,
         [newElement.id]: newElement
@@ -159,10 +174,25 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
     setLoading(true)
     setError(null)
     try {
-      const updatedElement = await updateUniversalElement(id, attributes)
+      const response = await updateUniversalElement(id, attributes)
+      const elementId = response.elementId || response.id || id
+      const updatedElement: ElementData = {
+        ...response,
+        id: elementId,
+        eClass: response.eClass,
+        attributes: {
+          declaredName: response.declaredName,
+          declaredShortName: response.declaredShortName,
+          of: response.of,
+          source: response.source,
+          target: response.target,
+          status: response.status || 'active',
+          ...response
+        }
+      }
       setElementsState(prev => ({
         ...prev,
-        [id]: updatedElement
+        [elementId]: updatedElement
       }))
       return updatedElement
     } catch (err) {
@@ -206,7 +236,21 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
     try {
       const response = await queryElementsByType(eClass, params)
       const elementsToAdd = (response.data || []).reduce((acc, element) => {
-        acc[element.id] = element
+        // 使用 elementId 作为 key，并将整个元素数据存储
+        const id = element.elementId || element.id
+        acc[id] = {
+          ...element,
+          id: id,  // 确保有 id 字段
+          attributes: {
+            declaredName: element.declaredName,
+            declaredShortName: element.declaredShortName,
+            of: element.of,
+            source: element.source,
+            target: element.target,
+            status: element.status || 'active',
+            ...element  // 保留所有其他属性
+          }
+        }
         return acc
       }, {} as Record<string, ElementData>)
       
@@ -230,7 +274,21 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
     try {
       const response = await queryAllElements(params)
       const elementsToAdd = (response.data || []).reduce((acc, element) => {
-        acc[element.id] = element
+        // 使用 elementId 作为 key，并将整个元素数据存储
+        const id = element.elementId || element.id
+        acc[id] = {
+          ...element,
+          id: id,  // 确保有 id 字段
+          attributes: {
+            declaredName: element.declaredName,
+            declaredShortName: element.declaredShortName,
+            of: element.of,
+            source: element.source,
+            target: element.target,
+            status: element.status || 'active',
+            ...element  // 保留所有其他属性
+          }
+        }
         return acc
       }, {} as Record<string, ElementData>)
       

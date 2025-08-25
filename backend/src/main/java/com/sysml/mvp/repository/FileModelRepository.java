@@ -10,7 +10,6 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
-import org.eclipse.sirius.components.emf.services.EditingContextCrossReferenceAdapter;
 import org.eclipse.sirius.emfjson.resource.JsonResource;
 import org.eclipse.sirius.emfjson.resource.JsonResourceFactoryImpl;
 import org.springframework.beans.factory.annotation.Value;
@@ -73,8 +72,8 @@ public class FileModelRepository {
         JsonResource resource = (JsonResource) factory.createResource(uri);
         resourceSet.getResources().add(resource);
         
-        // 添加CrossReferenceAdapter处理引用
-        resourceSet.eAdapters().add(new EditingContextCrossReferenceAdapter());
+        // 不添加CrossReferenceAdapter，避免null adapter问题
+        // 如果需要处理引用，可以使用EMF内置的解析机制
         
         return resource;
     }

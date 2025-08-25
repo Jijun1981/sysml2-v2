@@ -1,280 +1,268 @@
-import React, { useMemo, useCallback, useEffect } from 'react'
-import ReactFlow, {
-  Controls,
-  MiniMap,
+import React, { useMemo, useCallback } from 'react'
+import ReactFlow, { 
+  Node, 
+  Edge, 
+  Controls, 
   Background,
-  BackgroundVariant,
-  Node,
-  Edge,
-  MarkerType,
+  MiniMap,
   useNodesState,
   useEdgesState,
+  addEdge,
   Connection,
-  addEdge
+  BackgroundVariant,
+  MarkerType
 } from 'reactflow'
-import { Card } from 'antd'
+import { Card, Empty, Spin } from 'antd'
 import { useModelContext } from '../../../contexts/ModelContext'
 import 'reactflow/dist/style.css'
 import './GraphView.css'
 
 /**
- * 图视图组件 - 基于通用接口和SSOT实现
- * REQ-D3-1: 图视图接口 - 返回nodes/edges
- * REQ-D3-2: 连线/删线 - 调用Trace创建/删除
- * REQ-A1-1: 数据源唯一 - 从SSOT获取数据
+ * 图视图组件 - 完全基于SSOT和通用接口
+ * 需求实现：
+ * - REQ-D3-1: 从通用接口数据构建图结构
+ * - REQ-D3-2: 通过通用接口创建/删除关系
+ * - REQ-D3-3: 前端自动布局
+ * - REQ-A1-1: 作为SSOT的投影视图
  */
 const GraphView: React.FC = () => {
   const { 
-    selectedIds, 
+    elements,
+    selectedIds,
+    loading,
     selectElement,
     createElement,
     deleteElement,
-    getGraphViewData,
-    loadAllElements,
-    loading
+    loadAllElements
   } = useModelContext()
-
-  // 初始加载数据
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        await loadAllElements()
-      } catch (error) {
-        console.error('GraphView: 加载数据失败', error)
-      }
-    }
+  
+  // REQ-D3-1: 从SSOT构建图数据结构
+  const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
+    const nodes: Node[] = []
+    const edges: Edge[] = []
     
-    loadData()
-  }, [loadAllElements])
-
-  // 构建节点和边数据 - 使用ModelContext的视图投影方法
-  const { nodes: graphNodes, edges: graphEdges } = getGraphViewData()
-
-  // 构建ReactFlow节点数据
-  const initialNodes = useMemo(() => {
-    return graphNodes.map((node, index) => {
-      const isSelected = selectedIds.has(node.id)
-      const isRelated = Array.from(selectedIds).some(selectedId => 
-        graphEdges.some(edge => 
-          (edge.source === selectedId && edge.target === node.id) ||
-          (edge.target === selectedId && edge.source === node.id)
-        )
-      )
-      
-      // 根据节点类型设置不同的样式
-      let nodeStyle = {
-        background: '#fff',
-        border: '1px solid #d9d9d9',
-        borderRadius: '8px',
-        padding: '10px',
-        fontSize: '12px'
-      }
-
-      if (isSelected) {
-        nodeStyle = {
-          ...nodeStyle,
-          background: '#bae7ff',
-          border: '2px solid #1890ff'
-        }
-      } else if (isRelated) {
-        nodeStyle = {
-          ...nodeStyle,
-          background: '#f6ffed',
-          border: '1px solid #52c41a'
-        }
-      }
-
-      // 根据类型设置颜色
-      switch (node.type) {
-        case 'requirementdefinition':
-          nodeStyle.background = isSelected ? '#bae7ff' : '#e6f7ff'
-          break
-        case 'requirementusage':
-          nodeStyle.background = isSelected ? '#f6ffed' : '#f6ffed'
-          break
-        case 'partusage':
-          nodeStyle.background = isSelected ? '#fff7e6' : '#fff7e6'
-          break
-        default:
-          break
-      }
-      
-      return {
-        id: node.id,
+    // 布局参数
+    const nodeWidth = 150
+    const nodeHeight = 50
+    const horizontalSpacing = 200
+    const verticalSpacing = 100
+    
+    // 按类型分组
+    const definitions = Object.values(elements).filter(el => el.eClass === 'RequirementDefinition')
+    const usages = Object.values(elements).filter(el => el.eClass === 'RequirementUsage')
+    const dependencies = Object.values(elements).filter(el => 
+      ['Satisfy', 'DeriveRequirement', 'Refine', 'Dependency'].includes(el.eClass)
+    )
+    
+    // 创建Definition节点（第一行）
+    definitions.forEach((def, index) => {
+      nodes.push({
+        id: def.id,
         type: 'default',
         position: { 
-          x: node.x || 100 + (index % 4) * 250, 
-          y: node.y || 100 + Math.floor(index / 4) * 150 
+          x: index * horizontalSpacing, 
+          y: 0 
         },
         data: { 
-          label: (
-            <div data-testid={`graph-node-label-${node.id}`}>
-              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                {node.type}
-              </div>
-              <div>{node.label}</div>
-            </div>
-          )
+          label: def.attributes?.declaredName || def.attributes?.declaredShortName || def.id 
         },
-        style: nodeStyle,
-        className: `graph-node ${isSelected ? 'selected' : ''} ${isRelated ? 'related' : ''}`,
-      }
-    })
-  }, [graphNodes, selectedIds, graphEdges])
-
-  // 构建ReactFlow边数据
-  const initialEdges = useMemo(() => {
-    return graphEdges.map(edge => {
-      const isHighlighted = Array.from(selectedIds).some(selectedId => 
-        edge.source === selectedId || edge.target === selectedId
-      )
-      
-      const edgeColor = getEdgeColor(edge.type)
-      
-      return {
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        type: 'default',
-        animated: edge.type === 'derive',
-        label: edge.label || edge.type,
         style: {
-          stroke: edgeColor,
-          strokeWidth: isHighlighted ? 2 : 1,
-          strokeDasharray: edge.type === 'of' ? '5,5' : 'none'
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: edgeColor
-        },
-        className: `graph-edge ${isHighlighted ? 'highlighted' : ''}`,
-        data: {
-          testId: `graph-edge-${edge.id}`
+          background: selectedIds.has(def.id) ? '#b3d9ff' : '#fff',
+          border: '2px solid #1890ff',
+          borderRadius: '5px',
+          padding: '10px',
+          width: nodeWidth,
         }
+      })
+    })
+    
+    // 创建Usage节点（第二行）
+    usages.forEach((usage, index) => {
+      nodes.push({
+        id: usage.id,
+        type: 'default',
+        position: { 
+          x: index * horizontalSpacing, 
+          y: verticalSpacing 
+        },
+        data: { 
+          label: usage.attributes?.declaredName || usage.attributes?.declaredShortName || usage.id 
+        },
+        style: {
+          background: selectedIds.has(usage.id) ? '#d4f1d4' : '#fff',
+          border: '2px solid #52c41a',
+          borderRadius: '5px',
+          padding: '10px',
+          width: nodeWidth,
+        }
+      })
+      
+      // 创建of关系边
+      if (usage.attributes?.of) {
+        edges.push({
+          id: `of-${usage.id}`,
+          source: usage.attributes.of,
+          target: usage.id,
+          type: 'smoothstep',
+          animated: true,
+          label: 'of',
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+          },
+          style: { stroke: '#1890ff' }
+        })
       }
     })
-  }, [graphEdges, selectedIds])
-
+    
+    // 创建依赖关系边
+    dependencies.forEach(dep => {
+      if (dep.attributes?.source && dep.attributes?.target) {
+        edges.push({
+          id: dep.id,
+          source: dep.attributes.source,
+          target: dep.attributes.target,
+          type: 'smoothstep',
+          label: dep.eClass.toLowerCase(),
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+          },
+          style: { 
+            stroke: dep.eClass === 'Satisfy' ? '#52c41a' : 
+                   dep.eClass === 'DeriveRequirement' ? '#fa8c16' : 
+                   '#722ed1'
+          }
+        })
+      }
+    })
+    
+    // 添加其他类型的节点（第三行）
+    const otherElements = Object.values(elements).filter(el => 
+      !['RequirementDefinition', 'RequirementUsage', 'Satisfy', 'DeriveRequirement', 'Refine', 'Dependency'].includes(el.eClass)
+    )
+    
+    otherElements.forEach((el, index) => {
+      nodes.push({
+        id: el.id,
+        type: 'default',
+        position: { 
+          x: index * horizontalSpacing, 
+          y: verticalSpacing * 2 
+        },
+        data: { 
+          label: el.attributes?.declaredName || el.attributes?.declaredShortName || el.id 
+        },
+        style: {
+          background: selectedIds.has(el.id) ? '#ffe7ba' : '#fff',
+          border: '2px solid #fa8c16',
+          borderRadius: '5px',
+          padding: '10px',
+          width: nodeWidth,
+        }
+      })
+    })
+    
+    return { nodes, edges }
+  }, [elements, selectedIds])
+  
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
-
+  
   // 更新节点和边
   React.useEffect(() => {
     setNodes(initialNodes)
-  }, [initialNodes, setNodes])
-
-  React.useEffect(() => {
     setEdges(initialEdges)
-  }, [initialEdges, setEdges])
-
-  // 处理节点点击 - 支持多选
+  }, [initialNodes, initialEdges, setNodes, setEdges])
+  
+  // REQ-D3-2: 处理连线 - 创建依赖关系
+  const onConnect = useCallback(async (params: Connection) => {
+    if (params.source && params.target) {
+      try {
+        // 创建Satisfy关系（可以根据需要选择其他类型）
+        const newDependency = await createElement('Satisfy', {
+          source: params.source,
+          target: params.target
+        })
+        
+        // 添加新边到图中
+        setEdges((eds) => addEdge({
+          ...params,
+          id: newDependency.id,
+          label: 'satisfy',
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+          },
+          style: { stroke: '#52c41a' }
+        }, eds))
+      } catch (error) {
+        console.error('创建关系失败:', error)
+        // REQ-D3-2: 失败时回滚UI
+      }
+    }
+  }, [createElement, setEdges])
+  
+  // 处理节点点击 - 选中联动
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     const multiSelect = event.ctrlKey || event.metaKey
     selectElement(node.id, multiSelect)
   }, [selectElement])
-
-  // 处理连线 - 创建Satisfy关系
-  const onConnect = useCallback(
-    async (params: Connection) => {
-      if (params.source && params.target) {
-        try {
-          // 默认创建Satisfy关系，实际应用中可以让用户选择关系类型
-          await createElement('Satisfy', {
-            source: params.source,
-            target: params.target
-          })
-        } catch (error) {
-          console.error('创建关系失败:', error)
-        }
-      }
-    },
-    [createElement]
-  )
-
-  // 处理边删除
-  const onEdgeClick = useCallback(
-    async (event: React.MouseEvent, edge: Edge) => {
+  
+  // REQ-D3-2: 处理边删除 - 删除依赖关系
+  const onEdgesDelete = useCallback(async (edgesToDelete: Edge[]) => {
+    for (const edge of edgesToDelete) {
       // 只删除依赖关系，不删除of关系
       if (!edge.id.startsWith('of-')) {
-        if (window.confirm(`确定删除关系 ${edge.label}?`)) {
-          try {
-            await deleteElement(edge.id)
-          } catch (error) {
-            console.error('删除关系失败:', error)
-          }
+        try {
+          await deleteElement(edge.id)
+        } catch (error) {
+          console.error('删除关系失败:', error)
+          // REQ-D3-2: 失败时回滚UI
+          setEdges((eds) => [...eds, edge])
         }
       }
-    },
-    [deleteElement]
-  )
-
+    }
+  }, [deleteElement, setEdges])
+  
+  // 初始加载数据（如果需要）
+  React.useEffect(() => {
+    if (Object.keys(elements).length === 0 && !loading) {
+      loadAllElements()
+    }
+  }, [])
+  
   return (
     <Card 
-      className="graph-view-card" 
+      className="graph-view-card"
+      title="关系图"
+      size="small"
       style={{ height: '100%' }}
-      data-testid="graph-view"
-      title="依赖关系图"
-      loading={loading}
     >
-      <ReactFlow
-        nodes={nodes.map(node => ({
-          ...node,
-          data: {
-            ...node.data,
-            testId: `graph-node-${node.id}`
-          }
-        }))}
-        edges={edges.map(edge => ({
-          ...edge,
-          data: {
-            ...edge.data,
-            testId: `graph-edge-${edge.id}`
-          }
-        }))}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onNodeClick={onNodeClick}
-        onEdgeClick={onEdgeClick}
-        fitView
-        connectOnClick={false}
-        nodesDraggable={true}
-        nodesConnectable={true}
-        elementsSelectable={true}
-      >
-        <Controls />
-        <MiniMap 
-          nodeColor={(node) => {
-            if (selectedIds.has(node.id)) return '#1890ff'
-            switch (node.data?.type) {
-              case 'requirementdefinition': return '#e6f7ff'
-              case 'requirementusage': return '#f6ffed'
-              case 'partusage': return '#fff7e6'
-              default: return '#f0f0f0'
-            }
-          }}
-        />
-        <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
-      </ReactFlow>
+      <Spin spinning={loading}>
+        {nodes.length > 0 ? (
+          <div style={{ height: '500px' }}>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onNodeClick={onNodeClick}
+              onEdgesDelete={onEdgesDelete}
+              fitView
+            >
+              <Background variant={BackgroundVariant.Dots} />
+              <Controls />
+              <MiniMap />
+            </ReactFlow>
+          </div>
+        ) : (
+          <Empty 
+            description={loading ? "加载中..." : "暂无数据"}
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
+        )}
+      </Spin>
     </Card>
   )
-}
-
-// 根据关系类型获取边的颜色
-function getEdgeColor(type: string): string {
-  switch (type) {
-    case 'derive':
-      return '#1890ff' // 蓝色
-    case 'satisfy':
-      return '#52c41a' // 绿色
-    case 'refine':
-      return '#fa8c16' // 橙色
-    case 'of':
-      return '#999999' // 灰色，虚线
-    case 'trace':
-    default:
-      return '#8c8c8c' // 灰色
-  }
 }
 
 export default GraphView

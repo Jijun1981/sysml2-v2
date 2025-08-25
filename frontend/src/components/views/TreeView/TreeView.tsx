@@ -1,131 +1,111 @@
-import React, { useMemo, useEffect } from 'react'
-import { Tree, Card, Spin } from 'antd'
+import React, { useMemo } from 'react'
+import { Tree, Card, Empty, Spin } from 'antd'
 import { FileOutlined, FolderOutlined } from '@ant-design/icons'
 import { useModelContext } from '../../../contexts/ModelContext'
 import type { DataNode } from 'antd/es/tree'
 import './TreeView.css'
 
 /**
- * 树视图组件 - 基于通用接口和SSOT实现
- * REQ-D1-1: 树视图接口
- * REQ-D1-3: 联动 - 选中项高亮
- * REQ-A1-1: 数据源唯一 - 从SSOT获取数据
+ * 树视图组件 - 完全基于SSOT和通用接口
+ * 需求实现：
+ * - REQ-D1-1: 从通用接口数据构建树结构
+ * - REQ-D1-2: 通过通用接口进行写回
+ * - REQ-D1-3: 通过Context实现联动
+ * - REQ-A1-1: 作为SSOT的投影视图
  */
 const TreeView: React.FC = () => {
   const { 
     elements, 
     selectedIds, 
     loading,
-    selectElement, 
-    getTreeViewData,
-    loadElementsByType 
+    selectElement,
+    loadAllElements
   } = useModelContext()
   
-  // 初始加载数据
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        await loadElementsByType('RequirementDefinition')
-        await loadElementsByType('RequirementUsage')
-      } catch (error) {
-        console.error('TreeView: 加载数据失败', error)
-      }
-    }
+  // REQ-D1-1: 从SSOT构建树形数据结构
+  const treeData = useMemo(() => {
+    const nodes: DataNode[] = []
     
-    // 如果没有任何元素数据，则加载
-    const hasRequirementData = Object.values(elements).some(
-      element => element.eClass === 'RequirementDefinition' || element.eClass === 'RequirementUsage'
+    // 先找出所有Definition作为父节点
+    const definitions = Object.values(elements).filter(
+      el => el.eClass === 'RequirementDefinition'
     )
     
-    if (!hasRequirementData) {
-      loadData()
-    }
-  }, []) // 移除循环依赖，只在挂载时执行一次
-  
-  // 构建树形数据 - 使用ModelContext的视图投影方法
-  const treeData = useMemo(() => {
-    const treeViewData = getTreeViewData()
-    
-    const nodes: DataNode[] = treeViewData.definitions.map(def => {
-      // 构建Usage子节点
-      const usageChildren = (def.usages || []).map(usage => ({
-        key: usage.id,
-        title: (
-          <span data-testid={`tree-node-text-${usage.id}`}>
-            {usage.label}
-          </span>
-        ),
-        icon: <FileOutlined />,
-        className: selectedIds.has(usage.id) ? 'tree-node-selected' : ''
-      }))
+    definitions.forEach(def => {
+      // 找出关联的Usage作为子节点
+      const usages = Object.values(elements).filter(
+        el => el.eClass === 'RequirementUsage' && el.attributes?.of === def.id
+      )
       
-      return {
+      const defNode: DataNode = {
         key: def.id,
-        title: (
-          <span data-testid={`tree-node-text-${def.id}`}>
-            {def.label}
-          </span>
-        ),
+        title: def.attributes?.declaredName || def.attributes?.declaredShortName || def.id,
         icon: <FolderOutlined />,
-        children: usageChildren,
-        className: selectedIds.has(def.id) ? 'tree-node-selected expanded' : 'expanded'
+        className: selectedIds.has(def.id) ? 'tree-node selected' : 'tree-node',
+        children: usages.map(usage => ({
+          key: usage.id,
+          title: usage.attributes?.declaredName || usage.attributes?.declaredShortName || usage.id,
+          icon: <FileOutlined />,
+          className: selectedIds.has(usage.id) ? 'tree-node selected' : 'tree-node'
+        }))
       }
+      
+      nodes.push(defNode)
+    })
+    
+    // 添加没有父节点的Usage（孤立的）
+    const orphanUsages = Object.values(elements).filter(
+      el => el.eClass === 'RequirementUsage' && !el.attributes?.of
+    )
+    
+    orphanUsages.forEach(usage => {
+      nodes.push({
+        key: usage.id,
+        title: usage.attributes?.declaredName || usage.attributes?.declaredShortName || usage.id,
+        icon: <FileOutlined />,
+        className: selectedIds.has(usage.id) ? 'tree-node selected' : 'tree-node'
+      })
     })
     
     return nodes
-  }, [elements, selectedIds])  // 直接依赖elements而不是函数
+  }, [elements, selectedIds])
   
-  // 处理选择事件 - 支持多选
+  // REQ-D1-3: 处理选择事件 - 通过Context管理状态
   const handleSelect = (selectedKeys: React.Key[], info: any) => {
-    const id = selectedKeys[0] as string
-    const multiSelect = info.nativeEvent?.ctrlKey || info.nativeEvent?.metaKey
-    
-    if (id) {
+    if (selectedKeys.length > 0) {
+      const id = selectedKeys[0] as string
+      const multiSelect = info.nativeEvent?.ctrlKey || info.nativeEvent?.metaKey
       selectElement(id, multiSelect)
     }
   }
   
-  // 获取当前选中的keys
-  const selectedKeys = Array.from(selectedIds)
+  // 初始加载数据（如果需要）
+  React.useEffect(() => {
+    if (Object.keys(elements).length === 0 && !loading) {
+      loadAllElements()
+    }
+  }, [])
   
   return (
     <Card 
       className="tree-view-card" 
-      data-testid="tree-view"
       title="需求结构"
+      size="small"
     >
-      <Spin spinning={loading} tip="加载中...">
+      <Spin spinning={loading}>
         {treeData.length > 0 ? (
           <Tree
             showIcon
             defaultExpandAll
-            multiple
-            selectedKeys={selectedKeys}
+            selectedKeys={Array.from(selectedIds)}
             onSelect={handleSelect}
-            treeData={treeData.map(node => ({
-              ...node,
-              key: node.key,
-              // 添加测试标识
-              className: `${node.className || ''} tree-node`,
-              title: (
-                <div data-testid={`tree-node-${node.key}`} className={selectedIds.has(node.key as string) ? 'selected' : ''}>
-                  {node.title}
-                </div>
-              ),
-              children: node.children?.map(child => ({
-                ...child,
-                title: (
-                  <div data-testid={`tree-node-${child.key}`} className={selectedIds.has(child.key as string) ? 'selected' : ''}>
-                    {child.title}
-                  </div>
-                )
-              }))
-            }))}
+            treeData={treeData}
           />
         ) : (
-          <div className="tree-empty-state">
-            {loading ? '加载中...' : '暂无需求数据'}
-          </div>
+          <Empty 
+            description={loading ? "加载中..." : "暂无需求数据"}
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
         )}
       </Spin>
     </Card>

@@ -1,83 +1,94 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { Table, Tag, Space, Button, Tooltip, Input, Select, Card } from 'antd';
-import { EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
-import { useModelContext, TableRowData } from '../../../contexts/ModelContext';
+import React, { useState, useMemo } from 'react'
+import { Table, Card, Tag, Input, Select, Space } from 'antd'
+import { SearchOutlined } from '@ant-design/icons'
+import { useModelContext } from '../../../contexts/ModelContext'
+import type { ColumnsType } from 'antd/es/table'
 
-const { Search } = Input;
-const { Option } = Select;
+const { Search } = Input
+const { Option } = Select
 
 /**
- * 表视图组件 - 基于通用接口和SSOT实现
- * REQ-D2-1: 表视图接口
- * REQ-D2-2: 联动 - 点击表行高亮
- * REQ-A1-1: 数据源唯一 - 从SSOT获取数据
+ * 表视图组件 - 完全基于SSOT和通用接口
+ * 需求实现：
+ * - REQ-D2-1: 从通用接口获取数据，客户端渲染表格
+ * - REQ-D2-2: 通过Context实现联动
+ * - REQ-A1-1: 作为SSOT的投影视图
  */
 const TableView: React.FC = () => {
   const { 
-    selectedIds, 
-    selectElement, 
-    deleteElement, 
-    getTableViewData,
-    loadAllElements,
+    elements,
+    selectedIds,
     loading,
-    elements  // 添加elements依赖
-  } = useModelContext();
-
-  const [filteredData, setFilteredData] = useState<TableRowData[]>([]);
-  const [filterText, setFilterText] = useState('');
-  const [filterType, setFilterType] = useState<string>('all');
-
-  // 获取表格数据 - 使用useMemo避免无限重渲染
-  const tableData = useMemo(() => getTableViewData(), [elements]);
-
-  // 初始加载数据
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        await loadAllElements()
-      } catch (error) {
-        console.error('TableView: 加载数据失败', error)
-      }
+    selectElement,
+    loadAllElements
+  } = useModelContext()
+  
+  const [filterText, setFilterText] = useState('')
+  const [filterType, setFilterType] = useState<string>('all')
+  
+  // REQ-D2-1: 从SSOT构建表格数据
+  const tableData = useMemo(() => {
+    return Object.values(elements).map(element => ({
+      key: element.id,
+      id: element.id,
+      eClass: element.eClass,
+      declaredShortName: element.attributes?.declaredShortName || '',
+      declaredName: element.attributes?.declaredName || '',
+      status: element.attributes?.status || 'active',
+      of: element.attributes?.of,
+      source: element.attributes?.source,
+      target: element.attributes?.target
+    }))
+  }, [elements])
+  
+  // 客户端筛选和排序
+  const filteredData = useMemo(() => {
+    let data = tableData
+    
+    // 类型筛选
+    if (filterType !== 'all') {
+      data = data.filter(item => item.eClass === filterType)
     }
     
-    if (tableData.length === 0) {
-      loadData()
-    }
-  }, []); // 移除循环依赖，只在挂载时执行一次
-
-  // 过滤数据
-  useEffect(() => {
-    let data = tableData;
-
-    // 类型过滤
-    if (filterType !== 'all') {
-      data = data.filter(item => item.eClass === filterType);
-    }
-
-    // 文本过滤
+    // 文本筛选
     if (filterText) {
+      const searchText = filterText.toLowerCase()
       data = data.filter(item => 
-        item.declaredName?.toLowerCase().includes(filterText.toLowerCase()) ||
-        item.declaredShortName?.toLowerCase().includes(filterText.toLowerCase()) ||
-        item.eClass.toLowerCase().includes(filterText.toLowerCase())
-      );
+        item.declaredName.toLowerCase().includes(searchText) ||
+        item.declaredShortName.toLowerCase().includes(searchText) ||
+        item.id.toLowerCase().includes(searchText)
+      )
     }
-
-    setFilteredData(data);
-  }, [tableData, filterText, filterType]);
-
-  const columns = [
+    
+    return data
+  }, [tableData, filterText, filterType])
+  
+  // 获取所有的元素类型
+  const elementTypes = useMemo(() => {
+    const types = new Set(tableData.map(item => item.eClass))
+    return Array.from(types).sort()
+  }, [tableData])
+  
+  // 表格列定义
+  const columns: ColumnsType<any> = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 200,
+      ellipsis: true,
+    },
     {
       title: '类型',
       dataIndex: 'eClass',
       key: 'eClass',
-      width: 150,
+      width: 180,
       render: (eClass: string) => (
-        <Tag color="geekblue">{eClass}</Tag>
+        <Tag color="blue">{eClass}</Tag>
       ),
     },
     {
-      title: 'Short Name',
+      title: '短名称',
       dataIndex: 'declaredShortName',
       key: 'declaredShortName',
       width: 150,
@@ -87,11 +98,6 @@ const TableView: React.FC = () => {
       dataIndex: 'declaredName',
       key: 'declaredName',
       width: 250,
-      render: (text: string, record: TableRowData) => (
-        <span data-testid={`table-row-name-${record.id}`}>
-          {text || record.declaredShortName || record.id}
-        </span>
-      ),
     },
     {
       title: '状态',
@@ -99,105 +105,60 @@ const TableView: React.FC = () => {
       key: 'status',
       width: 100,
       render: (status: string) => {
-        const color = status === 'active' ? 'green' : status === 'draft' ? 'orange' : 'default';
-        return <Tag color={color}>{status || 'active'}</Tag>;
+        const color = status === 'active' ? 'green' : 'orange'
+        return <Tag color={color}>{status}</Tag>
       },
     },
     {
-      title: '引用关系',
-      key: 'references',
+      title: '关系',
+      key: 'relations',
       width: 150,
-      render: (_: any, record: TableRowData) => {
-        const refs = [];
-        if (record.of) refs.push(`of: ${record.of}`);
-        if (record.subject) refs.push(`subject: ${record.subject}`);
-        if (record.source) refs.push(`source: ${record.source}`);
-        if (record.target) refs.push(`target: ${record.target}`);
+      render: (_: any, record: any) => {
+        const relations = []
+        if (record.of) relations.push(`of:${record.of.slice(0, 8)}...`)
+        if (record.source) relations.push(`src:${record.source.slice(0, 8)}...`)
+        if (record.target) relations.push(`tgt:${record.target.slice(0, 8)}...`)
         
-        return refs.length > 0 ? (
-          <Tooltip title={refs.join(', ')}>
-            <Tag>{refs.length} 个引用</Tag>
-          </Tooltip>
-        ) : '-';
+        return relations.length > 0 ? (
+          <span style={{ fontSize: '12px' }}>{relations.join(', ')}</span>
+        ) : '-'
       },
     },
-    {
-      title: '操作',
-      key: 'action',
-      width: 120,
-      render: (_: any, record: TableRowData) => (
-        <Space size="small">
-          <Button 
-            type="link" 
-            icon={<EditOutlined />} 
-            size="small"
-            data-testid={`edit-button-${record.id}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              selectElement(record.id);
-            }}
-          />
-          <Button 
-            type="link" 
-            icon={<DeleteOutlined />} 
-            size="small"
-            danger
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                await deleteElement(record.id);
-              } catch (error) {
-                console.error('删除失败:', error);
-              }
-            }}
-          />
-        </Space>
-      ),
-    },
-  ];
-
-  // 获取选中状态的行样式
-  const getRowClassName = (record: TableRowData) => {
-    return selectedIds.has(record.id) ? 'table-row-selected selected' : '';
-  };
-
-  // 处理行点击
-  const handleRowClick = (record: TableRowData, index: number, event: React.MouseEvent) => {
-    const multiSelect = event.ctrlKey || event.metaKey;
-    selectElement(record.id, multiSelect);
-    
-    // 模拟滚动到视图（为了测试）
-    const element = event.currentTarget as HTMLElement;
-    if (element.scrollIntoView) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  ]
+  
+  // REQ-D2-2: 处理行点击 - 通过Context管理联动
+  const handleRowClick = (record: any, event: React.MouseEvent) => {
+    const multiSelect = event.ctrlKey || event.metaKey
+    selectElement(record.id, multiSelect)
+  }
+  
+  // 初始加载数据（如果需要）
+  React.useEffect(() => {
+    if (Object.keys(elements).length === 0 && !loading) {
+      loadAllElements()
     }
-  };
-
-  // 获取唯一的类型列表用于过滤
-  const elementTypes = Array.from(new Set(tableData.map(item => item.eClass))).sort();
-
+  }, [])
+  
   return (
     <Card 
-      className="table-view-card" 
-      data-testid="table-view"
-      title="元素表格"
+      className="table-view-card"
+      title="元素列表"
+      size="small"
     >
-      {/* 过滤器 */}
+      {/* 筛选器 */}
       <Space style={{ marginBottom: 16 }}>
         <Search
-          placeholder="搜索名称或类型"
+          placeholder="搜索ID、名称或短名称"
           allowClear
           style={{ width: 250 }}
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
-          data-testid="table-filter-input"
           prefix={<SearchOutlined />}
         />
         <Select
           value={filterType}
           onChange={setFilterType}
           style={{ width: 180 }}
-          placeholder="选择类型"
         >
           <Option value="all">所有类型</Option>
           {elementTypes.map(type => (
@@ -205,32 +166,30 @@ const TableView: React.FC = () => {
           ))}
         </Select>
       </Space>
-
-      <Table 
+      
+      {/* 表格 */}
+      <Table
         columns={columns}
         dataSource={filteredData}
-        rowKey="id"
-        size="small"
         loading={loading}
-        locale={{
-          emptyText: filteredData.length === 0 && tableData.length > 0 ? '无匹配数据' : '暂无数据'
-        }}
+        size="small"
         pagination={{
           pageSize: 20,
           showSizeChanger: true,
           showQuickJumper: true,
-          showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+          showTotal: (total) => `共 ${total} 条`,
         }}
-        rowClassName={getRowClassName}
-        onRow={(record, index) => ({
-          onClick: (event) => handleRowClick(record, index!, event),
-          'data-testid': `table-row-${record.id}`,
+        rowClassName={(record) => 
+          selectedIds.has(record.id) ? 'table-row-selected' : ''
+        }
+        onRow={(record) => ({
+          onClick: (event) => handleRowClick(record, event),
           className: selectedIds.has(record.id) ? 'selected' : '',
         })}
-        scroll={{ x: 800 }}
+        scroll={{ x: 1000 }}
       />
     </Card>
-  );
-};
+  )
+}
 
-export default TableView;
+export default TableView
