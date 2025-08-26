@@ -36,11 +36,11 @@ public class TraceService {
      */
     private static final Map<String, String> TYPE_TO_ECLASS_MAPPING = new HashMap<>();
     static {
-        // 在SysML 2.0中，所有追溯关系都使用Dependency类，通过type属性区分具体类型
-        TYPE_TO_ECLASS_MAPPING.put("derive", "Dependency");
-        TYPE_TO_ECLASS_MAPPING.put("satisfy", "Dependency");
-        TYPE_TO_ECLASS_MAPPING.put("refine", "Dependency");
-        TYPE_TO_ECLASS_MAPPING.put("trace", "Dependency");
+        // API层type到具体EMF EClass的映射
+        TYPE_TO_ECLASS_MAPPING.put("derive", "DeriveRequirement");
+        TYPE_TO_ECLASS_MAPPING.put("satisfy", "Satisfy");
+        TYPE_TO_ECLASS_MAPPING.put("refine", "Refine");
+        TYPE_TO_ECLASS_MAPPING.put("trace", "Trace");
     }
     
     public TraceService(
@@ -58,12 +58,21 @@ public class TraceService {
      * @throws IllegalArgumentException 如果字段缺失、重复或语义无效
      */
     public ElementDTO createTrace(Map<String, Object> traceData) {
-        // 【REQ-C3-1】验证必填字段
-        validateRequiredFields(traceData);
+        // 【REQ-C3-1】映射API字段到内部字段
+        Map<String, Object> internalData = new HashMap<>(traceData);
+        if (traceData.containsKey("source")) {
+            internalData.put("fromId", traceData.get("source"));
+        }
+        if (traceData.containsKey("target")) {
+            internalData.put("toId", traceData.get("target"));
+        }
         
-        String source = traceData.get("fromId").toString();
-        String target = traceData.get("toId").toString();
-        String type = traceData.get("type").toString();
+        // 【REQ-C3-1】验证必填字段
+        validateRequiredFields(internalData);
+        
+        String source = internalData.get("fromId").toString();
+        String target = internalData.get("toId").toString();
+        String type = internalData.get("type").toString();
         
         // 【REQ-C3-3】验证去重
         if (!validationService.validateTraceDuplication(source, target, type)) {
@@ -85,7 +94,7 @@ public class TraceService {
         }
         
         // 转换API层字段到EMF层字段
-        Map<String, Object> emfData = convertToEmfData(traceData);
+        Map<String, Object> emfData = convertToEmfData(internalData);
         
         // 委托给UniversalElementService创建
         return universalElementService.createElement(eClass, emfData);
@@ -216,11 +225,11 @@ public class TraceService {
      */
     private void validateRequiredFields(Map<String, Object> traceData) {
         if (!traceData.containsKey("fromId") || traceData.get("fromId") == null) {
-            throw new IllegalArgumentException("fromId is required for trace relationship");
+            throw new IllegalArgumentException("source is required for trace relationship");
         }
         
         if (!traceData.containsKey("toId") || traceData.get("toId") == null) {
-            throw new IllegalArgumentException("toId is required for trace relationship");
+            throw new IllegalArgumentException("target is required for trace relationship");
         }
         
         if (!traceData.containsKey("type") || traceData.get("type") == null) {

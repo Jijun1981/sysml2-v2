@@ -44,6 +44,81 @@ public class AdvancedQueryController {
     }
     
     /**
+     * REQ-D0-1 通用元素数据API - 基础查询接口
+     * REQ-B5-3 内部EMF工具层 - 只读对外接口
+     */
+    @GetMapping
+    public ResponseEntity<?> getAllElements(
+            @RequestParam(required = false) String type,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        try {
+            log.info("通用元素查询: type={}, page={}, size={}", type, page, size);
+            
+            // 参数验证
+            if (page < 0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Bad Request", "message", "page must be >= 0"));
+            }
+            if (size < 1 || size > 200) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Bad Request", "message", "size must be between 1 and 200"));
+            }
+            
+            // 获取所有元素
+            List<ElementDTO> allElements = universalElementService.getAllElements();
+            
+            // 如果指定了type，进行过滤
+            if (type != null && !type.trim().isEmpty()) {
+                String targetType = type.startsWith("sysml:") ? type : "sysml:" + type;
+                allElements = allElements.stream()
+                    .filter(element -> element.getEClass().equals(targetType) || element.getEClass().equals(type))
+                    .collect(Collectors.toList());
+            }
+            
+            // 应用分页
+            PagedResult pagedResult = applyPagination(allElements, page, size);
+            
+            // 构建响应
+            Map<String, Object> response = new HashMap<>();
+            response.put("content", pagedResult.content);
+            response.put("page", page);
+            response.put("size", size);
+            response.put("totalElements", pagedResult.totalElements);
+            response.put("totalPages", pagedResult.totalPages);
+            response.put("first", page == 0);
+            response.put("last", page >= pagedResult.totalPages - 1);
+            
+            if (type != null) {
+                response.put("type", type);
+            }
+            
+            log.info("通用元素查询完成: 返回{}个元素", pagedResult.content.size());
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("通用元素查询失败", e);
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "Internal Server Error",
+                "message", "Element query failed: " + e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * REQ-B5-3 写操作返回405 - 提示使用领域端点
+     */
+    @PostMapping
+    @PutMapping
+    @DeleteMapping
+    public ResponseEntity<?> writeOperationsNotAllowed() {
+        return ResponseEntity.status(405).body(Map.of(
+            "error", "Method Not Allowed",
+            "message", "请使用领域端点进行写操作，如: /api/v1/requirements, /api/v1/traces 等"
+        ));
+    }
+
+    /**
      * 高级查询接口 - 支持分页、排序、过滤、搜索
      */
     @GetMapping("/advanced")
