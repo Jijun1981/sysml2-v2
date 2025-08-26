@@ -1,19 +1,20 @@
 import React from 'react'
-import { BrowserRouter } from 'react-router-dom'
-import { ModelProvider } from './contexts/ModelContext'
-import MainLayout from './components/layout/MainLayout'
+import { ConfigProvider } from 'antd'
+import zhCN from 'antd/locale/zh_CN'
+import ModelViewerClean from './components/ModelViewerClean'
+import 'antd/dist/reset.css'
 import './styles/App.css'
 
 /**
- * 应用主组件
+ * SysML v2 MVP 应用主组件
  */
 const App: React.FC = () => {
   return (
-    <BrowserRouter>
-      <ModelProvider>
-        <MainLayout />
-      </ModelProvider>
-    </BrowserRouter>
+    <ConfigProvider locale={zhCN}>
+      <div className="app-container">
+        <ModelViewerClean />
+      </div>
+    </ConfigProvider>
   )
 }
 

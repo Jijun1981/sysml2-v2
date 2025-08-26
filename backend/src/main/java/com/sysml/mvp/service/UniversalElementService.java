@@ -1,394 +1,263 @@
 package com.sysml.mvp.service;
 
+import com.sysml.mvp.dto.ElementDTO;
 import com.sysml.mvp.model.EMFModelRegistry;
 import com.sysml.mvp.repository.FileModelRepository;
-import org.eclipse.emf.ecore.*;
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.resource.Resource;
-import org.eclipse.emf.common.util.EList;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 通用元素服务 - 完全基于Map，避免DTO转换问题
- * 实现REQ-B5-1到REQ-B5-4
+ * 通用元素服务（内部工具层）
  * 
- * 核心设计：直接返回Map<String, Object>，避免EMF类型转换错误
+ * 需求实现：
+ * - REQ-B5-3: 内部EMF工具层 - 提供通用元素操作能力，/api/v1/elements仅支持读
+ * - REQ-D0-1: 通用元素数据API - 支持查询任意SysML类型
+ * - REQ-B2-4: DTO选择性映射 - 支持PATCH部分更新
+ * - REQ-B2-1: 创建API - 支持动态创建任意类型
+ * 
+ * 设计说明：
+ * 1. 这是内部服务层，不直接暴露为Controller
+ * 2. 领域服务（RequirementService等）委托给此服务执行通用操作
+ * 3. 所有EMF操作最终委托给PilotEMFService
+ * 4. 支持182个SysML EClass类型的通用CRUD
  */
 @Service
 public class UniversalElementService {
     
-    @Autowired
-    private FileModelRepository repository;
+    private final PilotEMFService pilotEMFService;
+    private final FileModelRepository fileModelRepository;
+    private final EMFModelRegistry emfModelRegistry;
     
-    @Autowired
-    private EMFModelRegistry modelRegistry;
-    
-    /**
-     * REQ-B5-1: 创建任意类型的元素
-     * 
-     * @param projectId 项目ID
-     * @param request 包含eClass和其他属性的Map
-     * @return 创建的元素Map
-     */
-    public Map<String, Object> createElement(String projectId, Map<String, Object> request) {
-        String eClassName = (String) request.get("eClass");
-        if (eClassName == null || eClassName.isEmpty()) {
-            throw new IllegalArgumentException("eClass is required");
-        }
-        
-        // 获取EClass
-        EPackage ePackage = modelRegistry.getSysMLPackage();
-        EClass eClass = (EClass) ePackage.getEClassifier(eClassName);
-        if (eClass == null) {
-            throw new IllegalArgumentException("Unknown eClass: " + eClassName);
-        }
-        
-        // 创建实例
-        EObject element = ePackage.getEFactoryInstance().create(eClass);
-        
-        // 设置属性
-        for (Map.Entry<String, Object> entry : request.entrySet()) {
-            String key = entry.getKey();
-            if ("eClass".equals(key)) continue;
-            
-            EStructuralFeature feature = eClass.getEStructuralFeature(key);
-            if (feature != null && !feature.isDerived() && feature.isChangeable()) {
-                try {
-                    element.eSet(feature, entry.getValue());
-                } catch (Exception e) {
-                    // 忽略设置失败的属性
-                    System.err.println("Failed to set " + key + ": " + e.getMessage());
-                }
-            }
-        }
-        
-        // 生成elementId
-        String elementId = eClassName.toLowerCase() + "-" + UUID.randomUUID().toString();
-        EStructuralFeature idFeature = eClass.getEStructuralFeature("elementId");
-        if (idFeature != null) {
-            element.eSet(idFeature, elementId);
-        }
-        
-        // 保存到资源
-        Resource resource = repository.loadProject(projectId);
-        resource.getContents().add(element);
-        repository.saveProject(projectId, resource);
-        
-        // 转换为Map
-        return eObjectToMap(element);
+    public UniversalElementService(
+            PilotEMFService pilotEMFService,
+            FileModelRepository fileModelRepository,
+            EMFModelRegistry emfModelRegistry) {
+        this.pilotEMFService = pilotEMFService;
+        this.fileModelRepository = fileModelRepository;
+        this.emfModelRegistry = emfModelRegistry;
     }
     
     /**
-     * REQ-B5-2: 查询元素
-     * 
-     * @param projectId 项目ID
-     * @param type 元素类型（可选）
-     * @param params 查询参数
+     * 【REQ-B2-1】创建任意类型的SysML元素
+     * @param eClassName SysML类型名称（如RequirementDefinition）
+     * @param attributes 元素属性Map
+     * @return 创建的元素DTO
+     * @throws IllegalArgumentException 如果缺少elementId
+     */
+    public ElementDTO createElement(String eClassName, Map<String, Object> attributes) {
+        // 【REQ-B2-1】验证必填字段
+        if (!attributes.containsKey("elementId")) {
+            throw new IllegalArgumentException("elementId is required");
+        }
+        
+        // 使用PilotEMFService创建元素（它内部会处理EClass查找）
+        EObject eObject = pilotEMFService.createElement(eClassName, attributes);
+        
+        // 添加到Resource（假设默认项目ID为"default"）
+        String projectId = "default";
+        Resource resource = fileModelRepository.loadProject(projectId);
+        if (resource != null) {
+            resource.getContents().add(eObject);
+        } else {
+            throw new IllegalStateException("Project not found: " + projectId);
+        }
+        
+        // 保存
+        fileModelRepository.saveProject(projectId, resource);
+        
+        // 转换为DTO返回
+        return toDTO(eObject);
+    }
+    
+    /**
+     * 【REQ-D0-1】查询元素
+     * @param type 可选的类型过滤器（null表示查询所有）
      * @return 元素列表
      */
-    public List<Map<String, Object>> queryElements(String projectId, String type, Map<String, Object> params) {
-        Resource resource = repository.loadProject(projectId);
-        List<Map<String, Object>> result = new ArrayList<>();
-        
-        // 遍历所有内容
-        for (EObject obj : resource.getContents()) {
-            addElementsToResult(obj, type, result);
+    public List<ElementDTO> queryElements(String type) {
+        String projectId = "default";
+        Resource resource = fileModelRepository.loadProject(projectId);
+        if (resource == null) {
+            return new ArrayList<>();
         }
+        List<EObject> contents = resource.getContents();
         
-        // 分页处理（简化版）
-        int page = (int) params.getOrDefault("page", 0);
-        int size = (int) params.getOrDefault("size", 50);
-        int start = page * size;
-        int end = Math.min(start + size, result.size());
-        
-        if (start < result.size()) {
-            return result.subList(start, end);
-        }
-        
-        return result;
+        return contents.stream()
+            .filter(obj -> type == null || obj.eClass().getName().equals(type))
+            .map(this::toDTO)
+            .collect(Collectors.toList());
     }
     
     /**
-     * 递归添加元素到结果集
+     * 【REQ-E1-3】获取所有元素
+     * 用于静态验证，返回模型中所有元素
+     * @return 所有元素列表
      */
-    private void addElementsToResult(EObject obj, String type, List<Map<String, Object>> result) {
-        // 如果指定了类型，过滤
-        if (type == null || type.isEmpty() || obj.eClass().getName().equals(type)) {
-            result.add(eObjectToMapWithHierarchy(obj));
-        }
-        
-        // 不再递归处理子元素 - 层次结构现在由eObjectToMapWithHierarchy处理
-        // 这样可以保持父子包含关系
+    public List<ElementDTO> getAllElements() {
+        return queryElements(null);
     }
     
     /**
-     * 将EObject转换为Map，保持层次结构（内嵌子对象）
+     * 【REQ-B2-4】PATCH更新元素部分属性
+     * @param elementId 元素ID
+     * @param updates 要更新的属性Map
+     * @return 更新后的元素DTO
      */
-    private Map<String, Object> eObjectToMapWithHierarchy(EObject obj) {
-        Map<String, Object> map = new HashMap<>();
-        
-        // 添加eClass信息
-        map.put("eClass", obj.eClass().getName());
-        map.put("eclass", obj.eClass().getName()); // 兼容性
-        
-        // 遍历所有属性
-        for (EStructuralFeature feature : obj.eClass().getEAllStructuralFeatures()) {
-            try {
-                if (!feature.isDerived() && obj.eIsSet(feature)) {
-                    String name = feature.getName();
-                    Object value = obj.eGet(feature);
-                    
-                    // 处理不同类型的值
-                    if (value == null) {
-                        map.put(name, null);
-                    } else if (value instanceof EList) {
-                        // EMF List类型 - 对于包含特性(containment)，内嵌完整对象
-                        EList<?> eList = (EList<?>) value;
-                        List<Object> list = new ArrayList<>();
-                        for (Object item : eList) {
-                            if (item instanceof EObject) {
-                                EObject childObj = (EObject) item;
-                                // 对于包含关系（如ownedFeature），递归内嵌完整对象
-                                if (feature instanceof org.eclipse.emf.ecore.EReference && 
-                                    ((org.eclipse.emf.ecore.EReference) feature).isContainment()) {
-                                    list.add(eObjectToMapWithHierarchy(childObj));
-                                } else {
-                                    // 对于引用关系，使用$ref
-                                    list.add(Map.of("$ref", getObjectId(childObj)));
-                                }
-                            } else {
-                                list.add(item);
-                            }
-                        }
-                        map.put(name, list);
-                    } else if (value instanceof EObject) {
-                        EObject childObj = (EObject) value;
-                        // 对于包含关系，内嵌完整对象；对于引用关系，使用ID
-                        if (feature instanceof org.eclipse.emf.ecore.EReference && 
-                            ((org.eclipse.emf.ecore.EReference) feature).isContainment()) {
-                            map.put(name, eObjectToMapWithHierarchy(childObj));
-                        } else {
-                            map.put(name, getObjectId(childObj));
-                        }
-                    } else if (value instanceof Enum) {
-                        // 枚举类型
-                        map.put(name, value.toString());
-                    } else {
-                        // 基本类型
-                        map.put(name, value);
-                    }
-                }
-            } catch (Exception e) {
-                // 忽略无法访问的属性
-                System.err.println("Failed to get feature " + feature.getName() + ": " + e.getMessage());
-            }
-        }
-        
-        return map;
-    }
-    
-    /**
-     * 获取单个元素
-     */
-    public Map<String, Object> getElementById(String projectId, String elementId) {
-        Resource resource = repository.loadProject(projectId);
-        
-        for (EObject obj : resource.getContents()) {
-            Map<String, Object> element = findElementById(obj, elementId);
-            if (element != null) {
-                return element;
-            }
-        }
-        
-        return null;
-    }
-    
-    /**
-     * 递归查找元素
-     */
-    private Map<String, Object> findElementById(EObject obj, String elementId) {
-        EStructuralFeature idFeature = obj.eClass().getEStructuralFeature("elementId");
-        if (idFeature != null) {
-            Object id = obj.eGet(idFeature);
-            if (elementId.equals(id)) {
-                return eObjectToMap(obj);
-            }
-        }
-        
-        for (EObject child : obj.eContents()) {
-            Map<String, Object> found = findElementById(child, elementId);
-            if (found != null) {
-                return found;
-            }
-        }
-        
-        return null;
-    }
-    
-    /**
-     * REQ-B5-3: 更新元素
-     */
-    public Map<String, Object> updateElement(String projectId, String elementId, Map<String, Object> updates) {
-        Resource resource = repository.loadProject(projectId);
-        EObject element = findEObjectById(resource, elementId);
-        
-        if (element == null) {
+    public ElementDTO patchElement(String elementId, Map<String, Object> updates) {
+        EObject eObject = findEObjectById(elementId);
+        if (eObject == null) {
             return null;
         }
         
-        // 更新属性
+        // 只更新指定的属性
         for (Map.Entry<String, Object> entry : updates.entrySet()) {
-            String key = entry.getKey();
-            EStructuralFeature feature = element.eClass().getEStructuralFeature(key);
-            if (feature != null && !feature.isDerived() && feature.isChangeable()) {
-                try {
-                    element.eSet(feature, entry.getValue());
-                } catch (Exception e) {
-                    System.err.println("Failed to update " + key + ": " + e.getMessage());
-                }
-            }
+            pilotEMFService.setAttributeIfExists(eObject, entry.getKey(), entry.getValue());
         }
         
         // 保存
-        repository.saveProject(projectId, resource);
+        String projectId = "default";
+        Resource resource = fileModelRepository.loadProject(projectId);
+        fileModelRepository.saveProject(projectId, resource);
         
-        return eObjectToMap(element);
+        return toDTO(eObject);
     }
     
     /**
-     * 删除元素
+     * 【REQ-B5-3】删除元素
+     * @param elementId 元素ID
+     * @return 是否删除成功
      */
-    public boolean deleteElement(String projectId, String elementId) {
-        Resource resource = repository.loadProject(projectId);
-        EObject element = findEObjectById(resource, elementId);
-        
-        if (element == null) {
+    public boolean deleteElement(String elementId) {
+        EObject eObject = findEObjectById(elementId);
+        if (eObject == null) {
             return false;
         }
         
-        // 从容器中移除
-        if (element.eContainer() != null) {
-            Object container = element.eContainer().eGet(element.eContainingFeature());
-            if (container instanceof EList) {
-                ((EList<?>) container).remove(element);
-            }
-        } else {
-            resource.getContents().remove(element);
+        String projectId = "default";
+        Resource resource = fileModelRepository.loadProject(projectId);
+        if (resource != null) {
+            resource.getContents().remove(eObject);
+            fileModelRepository.saveProject(projectId, resource);
+            return true;
         }
-        
-        // 保存
-        repository.saveProject(projectId, resource);
-        return true;
+        return false;
     }
     
     /**
-     * 查找EObject
+     * 【REQ-B5-3】根据ID查找元素
+     * @param elementId 元素ID
+     * @return 元素DTO，如果不存在返回null
      */
-    private EObject findEObjectById(Resource resource, String elementId) {
-        for (EObject obj : resource.getContents()) {
-            EObject found = findEObjectByIdRecursive(obj, elementId);
-            if (found != null) {
-                return found;
-            }
-        }
-        return null;
+    public ElementDTO findElementById(String elementId) {
+        EObject eObject = findEObjectById(elementId);
+        return eObject != null ? toDTO(eObject) : null;
     }
     
-    private EObject findEObjectByIdRecursive(EObject obj, String elementId) {
-        EStructuralFeature idFeature = obj.eClass().getEStructuralFeature("elementId");
-        if (idFeature != null) {
-            Object id = obj.eGet(idFeature);
+    /**
+     * 【REQ-D0-1】将EMF对象转换为DTO
+     * 保留所有属性到properties Map中
+     * @param eObject EMF对象
+     * @return ElementDTO
+     */
+    public ElementDTO toDTO(EObject eObject) {
+        if (eObject == null) {
+            return null;
+        }
+        
+        ElementDTO dto = new ElementDTO();
+        
+        // 设置eClass
+        dto.setEClass(eObject.eClass().getName());
+        
+        // 设置elementId
+        Object elementId = pilotEMFService.getAttributeValue(eObject, "elementId");
+        if (elementId != null) {
+            dto.setElementId(elementId.toString());
+        }
+        
+        // 获取所有属性并设置到properties
+        Map<String, Object> allAttributes = getAllAttributes(eObject);
+        for (Map.Entry<String, Object> entry : allAttributes.entrySet()) {
+            // elementId已经单独设置，不需要再加入properties
+            if (!"elementId".equals(entry.getKey())) {
+                dto.setProperty(entry.getKey(), entry.getValue());
+            }
+        }
+        
+        return dto;
+    }
+    
+    /**
+     * 内部方法：根据ID查找EMF对象
+     */
+    private EObject findEObjectById(String elementId) {
+        String projectId = "default";
+        Resource resource = fileModelRepository.loadProject(projectId);
+        if (resource == null) {
+            return null;
+        }
+        List<EObject> contents = resource.getContents();
+        
+        for (EObject obj : contents) {
+            Object id = pilotEMFService.getAttributeValue(obj, "elementId");
             if (elementId.equals(id)) {
                 return obj;
             }
         }
-        
-        for (EObject child : obj.eContents()) {
-            EObject found = findEObjectByIdRecursive(child, elementId);
-            if (found != null) {
-                return found;
-            }
-        }
-        
         return null;
     }
     
     /**
-     * 核心转换方法：EObject到Map
-     * 处理EMF List类型，避免ClassCastException
+     * 内部方法：获取EMF对象的所有属性
+     * 兼容PilotEMFService可能没有getAllAttributes方法的情况
      */
-    private Map<String, Object> eObjectToMap(EObject obj) {
-        Map<String, Object> map = new HashMap<>();
+    private Map<String, Object> getAllAttributes(EObject eObject) {
+        Map<String, Object> attributes = new HashMap<>();
         
-        // 添加eClass信息
-        map.put("eClass", obj.eClass().getName());
-        map.put("eclass", obj.eClass().getName()); // 兼容性
-        
-        // 遍历所有属性 - 使用更安全的方式
-        for (EStructuralFeature feature : obj.eClass().getEAllStructuralFeatures()) {
-            try {
-                if (!feature.isDerived() && obj.eIsSet(feature)) {
-                    String name = feature.getName();
-                    Object value = obj.eGet(feature);
-                    
-                    // 处理不同类型的值
-                    if (value == null) {
-                        map.put(name, null);
-                    } else if (value instanceof EList) {
-                        // EMF List类型 - 转换为普通List
-                        EList<?> eList = (EList<?>) value;
-                        List<Object> list = new ArrayList<>();
-                        for (Object item : eList) {
-                            if (item instanceof EObject) {
-                                // 递归转换，但要避免循环引用
-                                list.add(Map.of("$ref", getObjectId((EObject) item)));
-                            } else {
-                                list.add(item);
-                            }
-                        }
-                        map.put(name, list);
-                    } else if (value instanceof EObject) {
-                        // 引用类型 - 只返回ID
-                        map.put(name, getObjectId((EObject) value));
-                    } else if (value instanceof Enum) {
-                        // 枚举类型
-                        map.put(name, value.toString());
-                    } else {
-                        // 基本类型
-                        map.put(name, value);
-                    }
-                }
-            } catch (Exception e) {
-                // 忽略无法访问的属性
-                System.err.println("Failed to get feature " + feature.getName() + ": " + e.getMessage());
+        // 遍历所有属性特征
+        for (EStructuralFeature feature : eObject.eClass().getEAllStructuralFeatures()) {
+            if (feature.isDerived() || feature.isTransient()) {
+                continue; // 跳过派生和瞬态属性
+            }
+            
+            String name = feature.getName();
+            Object value = pilotEMFService.getAttributeValue(eObject, name);
+            
+            // 只添加可序列化的值，过滤掉EMF内部对象
+            if (value != null && isSerializableValue(value)) {
+                attributes.put(name, value);
             }
         }
         
-        return map;
+        return attributes;
     }
     
     /**
-     * 获取对象ID
+     * 检查值是否可以被Jackson安全序列化
+     * 过滤掉EMF内部对象如Enumerator等
      */
-    private String getObjectId(EObject obj) {
-        if (obj == null) return null;
-        
-        EStructuralFeature idFeature = obj.eClass().getEStructuralFeature("elementId");
-        if (idFeature != null) {
-            Object id = obj.eGet(idFeature);
-            if (id != null) return id.toString();
+    private boolean isSerializableValue(Object value) {
+        // 过滤EMF内部类型
+        String className = value.getClass().getName();
+        if (className.contains("eclipse.emf") && 
+            (className.contains("EEnumLiteralImpl") || 
+             className.contains("Enumerator") ||
+             className.contains("EList") ||
+             className.contains("EObject"))) {
+            return false;
         }
         
-        // 如果没有elementId，使用URI fragment
-        Resource resource = obj.eResource();
-        if (resource != null && resource.getURI() != null) {
-            return resource.getURIFragment(obj);
-        }
-        
-        // 最后的备选：使用hashCode
-        return "obj-" + Integer.toHexString(obj.hashCode());
+        // 只保留基本类型和集合类型
+        return value instanceof String || 
+               value instanceof Number ||
+               value instanceof Boolean ||
+               value instanceof Collection ||
+               value instanceof Map;
     }
 }

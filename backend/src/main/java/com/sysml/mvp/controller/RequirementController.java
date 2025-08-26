@@ -1,177 +1,187 @@
 package com.sysml.mvp.controller;
 
-import com.sysml.mvp.dto.RequirementDefinitionDTO;
+import com.sysml.mvp.dto.ElementDTO;
+import com.sysml.mvp.dto.RequirementDTO;
 import com.sysml.mvp.service.RequirementService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.sysml.mvp.mapper.ElementMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.validation.Valid;
-import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.stream.Collectors;
 
 /**
- * 需求管理控制器
- * 实现 REQ-C1-1, REQ-C1-2, REQ-C1-3, REQ-C2-1, REQ-C2-2
+ * 需求定义控制器
  * 
- * @deprecated 此控制器已被UniversalElementController替代。
- * 新的API路径：/api/v1/elements
- * 此类仅为兼容性保留，计划在下个版本删除。
+ * 需求实现：
+ * - REQ-A1-1: 需求定义CRUD API - 完整的REST API端点
+ * - REQ-C1-1: 创建需求定义 - POST /api/v1/requirements
+ * - REQ-C1-2: 查询需求定义 - GET /api/v1/requirements
+ * - REQ-C1-3: 更新需求定义 - PUT /api/v1/requirements/{id}
+ * - REQ-C1-4: 参数化文本渲染 - POST /api/v1/requirements/{id}/render
+ * - REQ-C2-1: 创建需求使用 - POST /api/v1/requirements/usages
+ * - REQ-C2-2: 查询需求使用 - GET /api/v1/requirements/usages
+ * 
+ * 设计说明：
+ * 1. 提供标准的REST API端点
+ * 2. 业务逻辑委托给RequirementService处理
+ * 3. 使用ElementMapper进行DTO转换
+ * 4. 标准HTTP状态码和错误处理
  */
-@Deprecated
-@Slf4j
 @RestController
-@RequestMapping("/requirements")
-@RequiredArgsConstructor
-@Validated
-@Tag(name = "Requirements (Deprecated)", description = "需求管理API - 已废弃，请使用UniversalElementController")
+@RequestMapping("/api/v1/requirements")
 public class RequirementController {
     
     private final RequirementService requirementService;
+    private final ElementMapper elementMapper;
+    
+    public RequirementController(RequirementService requirementService, ElementMapper elementMapper) {
+        this.requirementService = requirementService;
+        this.elementMapper = elementMapper;
+    }
     
     /**
-     * REQ-C1-1 & REQ-C2-1: 创建需求（定义或用法）
-     * AC: POST /requirements（type=definition）缺reqId|name|text→400；成功201返回对象与Location
-     * AC: POST /requirements（type=usage, of=defId）缺of→400；defId不存在→404
+     * 【REQ-C1-1】创建需求定义
+     * @param requirementDto 需求定义数据
+     * @return 201 Created 和创建的需求定义，或409 Conflict如果reqId重复
      */
     @PostMapping
-    @Operation(summary = "创建需求", description = "创建新的需求定义或用法，type为definition或usage")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "201", description = "创建成功"),
-        @ApiResponse(responseCode = "400", description = "参数错误或缺少必填字段"),
-        @ApiResponse(responseCode = "404", description = "引用的定义不存在"),
-        @ApiResponse(responseCode = "409", description = "reqId重复")
-    })
-    public ResponseEntity<RequirementDefinitionDTO> createRequirement(
-            @Valid @RequestBody RequirementDefinitionDTO.CreateRequest request) {
-        
-        log.info("收到创建需求请求: type={}, reqId={}, of={}", request.getType(), request.getReqId(), request.getOf());
-        
-        RequirementDefinitionDTO created = requirementService.createRequirement(request);
-        
-        // 构建Location header
-        URI location = URI.create("/requirements/" + created.getId());
-        
-        return ResponseEntity.created(location).body(created);
+    public ResponseEntity<?> createRequirement(@RequestBody RequirementDTO requirementDto) {
+        try {
+            Map<String, Object> elementData = elementMapper.toElementData(requirementDto);
+            ElementDTO createdElement = requirementService.createRequirement(elementData);
+            RequirementDTO responseDto = elementMapper.toRequirementDTO(createdElement);
+            return ResponseEntity.status(HttpStatus.CREATED).body(responseDto);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Conflict");
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+        }
     }
     
     /**
-     * REQ-C1-2 & REQ-C2-2: 获取需求（定义或用法）
-     * AC: GET /requirements/{id}可用
-     */
-    @GetMapping("/{id}")
-    @Operation(summary = "获取需求", description = "根据ID获取需求定义或用法详情")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "获取成功"),
-        @ApiResponse(responseCode = "404", description = "需求不存在")
-    })
-    public ResponseEntity<RequirementDefinitionDTO> getRequirement(
-            @Parameter(description = "需求ID") @PathVariable String id) {
-        
-        log.debug("获取需求: id={}", id);
-        
-        RequirementDefinitionDTO requirement = requirementService.getRequirement(id);
-        return ResponseEntity.ok(requirement);
-    }
-    
-    /**
-     * REQ-C1-2 & REQ-C2-2: 更新需求（定义或用法）
-     * AC: PUT /requirements/{id}；允许更新name,text,doc,tags（definition）
-     * AC: PUT /requirements/{id}；允许更新name,text,status,tags（usage）
-     */
-    @PutMapping("/{id}")
-    @Operation(summary = "更新需求", description = "更新需求定义或用法的允许字段")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "更新成功"),
-        @ApiResponse(responseCode = "404", description = "需求不存在")
-    })
-    public ResponseEntity<RequirementDefinitionDTO> updateRequirement(
-            @Parameter(description = "需求ID") @PathVariable String id,
-            @Valid @RequestBody RequirementDefinitionDTO.UpdateRequest request) {
-        
-        log.info("更新需求: id={}", id);
-        
-        RequirementDefinitionDTO updated = requirementService.updateRequirement(id, request);
-        return ResponseEntity.ok(updated);
-    }
-    
-    /**
-     * REQ-C1-2 & REQ-C2-2: PATCH部分更新需求
-     * AC: PATCH /api/v1/requirements/{id} 部分更新，仅修改请求体中提供的字段，其他字段保持不变
-     */
-    @PatchMapping("/{id}")
-    @Operation(summary = "部分更新需求", description = "使用PATCH方式部分更新需求，只修改提供的字段")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "更新成功"),
-        @ApiResponse(responseCode = "404", description = "需求不存在"),
-        @ApiResponse(responseCode = "400", description = "参数错误")
-    })
-    public ResponseEntity<RequirementDefinitionDTO> patchRequirement(
-            @Parameter(description = "需求ID") @PathVariable String id,
-            @RequestBody Map<String, Object> patchData) {
-        
-        log.info("PATCH更新需求: id={}, fields={}", id, patchData.keySet());
-        
-        RequirementDefinitionDTO updated = requirementService.patchRequirement(id, patchData);
-        return ResponseEntity.ok(updated);
-    }
-    
-    /**
-     * REQ-C1-2 & REQ-C2-2: 删除需求（定义或用法）
-     * AC: DELETE /requirements/{id}；被引用删除→409（definition）
-     * AC: DELETE /requirements/{id}；存在Trace时删除→409（usage，返回阻塞traceIds）
-     */
-    @DeleteMapping("/{id}")
-    @Operation(summary = "删除需求", description = "删除指定的需求定义或用法")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "204", description = "删除成功"),
-        @ApiResponse(responseCode = "404", description = "需求不存在"),
-        @ApiResponse(responseCode = "409", description = "需求被引用或存在Trace关系，无法删除")
-    })
-    public ResponseEntity<Void> deleteRequirement(
-            @Parameter(description = "需求ID") @PathVariable String id) {
-        
-        log.info("删除需求: id={}", id);
-        
-        requirementService.deleteRequirement(id);
-        return ResponseEntity.noContent().build();
-    }
-    
-    /**
-     * 获取所有需求列表（支持类型筛选）
+     * 【REQ-C1-2】查询所有需求定义
+     * @return 200 OK 和需求定义列表
      */
     @GetMapping
-    @Operation(summary = "获取需求列表", description = "获取所有需求的列表，支持type参数筛选")
-    @ApiResponse(responseCode = "200", description = "获取成功")
-    public ResponseEntity<List<RequirementDefinitionDTO>> listRequirements(
-            @Parameter(description = "类型筛选: definition, usage 或空（所有）") 
-            @RequestParam(required = false) String type) {
-        
-        log.debug("获取需求列表: type={}", type);
-        
-        List<RequirementDefinitionDTO> requirements;
-        if ("definition".equals(type)) {
-            requirements = requirementService.listDefinitions();
-        } else if ("usage".equals(type)) {
-            requirements = requirementService.listUsages();
-        } else {
-            requirements = requirementService.listRequirements();
-        }
-        
-        return ResponseEntity.ok(requirements);
+    public ResponseEntity<List<RequirementDTO>> getRequirements() {
+        List<ElementDTO> requirements = requirementService.getRequirements();
+        List<RequirementDTO> responseList = requirements.stream()
+            .map(elementMapper::toRequirementDTO)
+            .collect(Collectors.toList());
+        return ResponseEntity.ok(responseList);
     }
     
     /**
-     * 全局异常处理器会处理ResponseStatusException
-     * 这里不需要额外的异常处理方法
+     * 【REQ-C1-2】根据ID查询需求定义
+     * @param id 需求定义ID
+     * @return 200 OK 和需求定义，或404 Not Found如果不存在
      */
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getRequirementById(@PathVariable String id) {
+        ElementDTO requirement = requirementService.getRequirementById(id);
+        if (requirement == null) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Not Found");
+            error.put("message", "Requirement not found: " + id);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+        }
+        
+        RequirementDTO responseDto = elementMapper.toRequirementDTO(requirement);
+        return ResponseEntity.ok(responseDto);
+    }
+    
+    /**
+     * 【REQ-C1-3】更新需求定义
+     * @param id 需求定义ID
+     * @param requirementDto 更新数据
+     * @return 200 OK 和更新后的需求定义
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<RequirementDTO> updateRequirement(
+            @PathVariable String id, 
+            @RequestBody RequirementDTO requirementDto) {
+        Map<String, Object> updateData = elementMapper.toElementData(requirementDto);
+        ElementDTO updatedElement = requirementService.updateRequirement(id, updateData);
+        RequirementDTO responseDto = elementMapper.toRequirementDTO(updatedElement);
+        return ResponseEntity.ok(responseDto);
+    }
+    
+    /**
+     * 【REQ-C1-3】删除需求定义
+     * @param id 需求定义ID
+     * @return 204 No Content，或409 Conflict如果被引用
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteRequirement(@PathVariable String id) {
+        try {
+            requirementService.deleteRequirement(id);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalStateException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Conflict");
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+        }
+    }
+    
+    /**
+     * 【REQ-C1-4】渲染参数化文本
+     * @param id 需求定义ID
+     * @param parameters 参数Map
+     * @return 200 OK 和渲染结果
+     */
+    @PostMapping("/{id}/render")
+    public ResponseEntity<?> renderParametricText(
+            @PathVariable String id, 
+            @RequestBody Map<String, Object> parameters) {
+        try {
+            String renderedText = requirementService.renderParametricText(id, parameters);
+            Map<String, Object> response = new HashMap<>();
+            response.put("renderedText", renderedText);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Not Found");
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+        }
+    }
+    
+    /**
+     * 【REQ-C2-1】创建需求使用
+     * @param requirementDto 需求使用数据
+     * @return 201 Created 和创建的需求使用，或400 Bad Request如果缺少subject
+     */
+    @PostMapping("/usages")
+    public ResponseEntity<?> createRequirementUsage(@RequestBody RequirementDTO requirementDto) {
+        try {
+            Map<String, Object> elementData = elementMapper.toElementData(requirementDto);
+            ElementDTO createdElement = requirementService.createRequirementUsage(elementData);
+            RequirementDTO responseDto = elementMapper.toRequirementDTO(createdElement);
+            return ResponseEntity.status(HttpStatus.CREATED).body(responseDto);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Bad Request");
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        }
+    }
+    
+    /**
+     * 【REQ-C2-2】查询所有需求使用
+     * @return 200 OK 和需求使用列表
+     */
+    @GetMapping("/usages")
+    public ResponseEntity<List<RequirementDTO>> getRequirementUsages() {
+        List<ElementDTO> usages = requirementService.getRequirementUsages();
+        List<RequirementDTO> responseList = usages.stream()
+            .map(elementMapper::toRequirementDTO)
+            .collect(Collectors.toList());
+        return ResponseEntity.ok(responseList);
+    }
 }

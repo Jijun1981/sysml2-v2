@@ -2,31 +2,52 @@ import React, { createContext, useContext, useState, useCallback, ReactNode, use
 import { 
   ElementData, 
   createUniversalElement, 
-  queryElementsByType, 
-  queryAllElements,
   updateUniversalElement, 
   deleteUniversalElement,
   setProjectId
 } from '../services/universalApi'
+import { 
+  queryAdvanced, 
+  queryByType, 
+  searchRequirements as apiSearchRequirements, 
+  getApprovedRequirements as apiGetApprovedRequirements,
+  type QueryParams,
+  type AdvancedQueryResponse 
+} from '../services/advancedQueryApi'
 
 /**
  * 模型上下文接口 - 基于通用接口的SSOT实现
  * REQ-A1-1: 数据源唯一 - 统一元素存储
  * REQ-A1-2: 视图为投影 - 所有视图共享同一状态
  */
+// 分页信息类型
+interface PaginationInfo {
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  first: boolean
+  last: boolean
+}
+
 interface ModelContextType {
   // SSOT数据存储 - 以元素ID为key的映射
   elements: Record<string, ElementData>
   selectedIds: Set<string>
   loading: boolean
   error: Error | null
+  pagination: PaginationInfo
   
   // 元素操作（通用接口）
   createElement: (eClass: string, attributes: Record<string, any>) => Promise<ElementData>
   updateElement: (id: string, attributes: Record<string, any>) => Promise<ElementData>
   deleteElement: (id: string) => Promise<void>
-  loadElementsByType: (eClass: string, params?: any) => Promise<void>
-  loadAllElements: (params?: any) => Promise<void>
+  loadElementsByType: (eClass: string, params?: QueryParams) => Promise<void>
+  loadAllElements: (params?: QueryParams) => Promise<void>
+  
+  // 高级查询便利方法
+  searchRequirements: (searchTerm: string, params?: Omit<QueryParams, 'search'>) => Promise<void>
+  getApprovedRequirements: (params?: Omit<QueryParams, 'filter'>) => Promise<void>
   
   // 选择操作
   selectElement: (id: string, multiSelect?: boolean) => void
@@ -124,6 +145,14 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [currentProjectId, setCurrentProjectId] = useState(projectId)
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 0,
+    size: 50,
+    totalElements: 0,
+    totalPages: 0,
+    first: true,
+    last: true
+  })
 
   // 设置项目ID并清理状态
   const handleSetProjectId = useCallback((newProjectId: string) => {
@@ -229,28 +258,48 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
     }
   }, [])
 
-  // 按类型加载元素
-  const loadElementsByType = useCallback(async (eClass: string, params?: any): Promise<void> => {
+  // ElementDTO转换为SSOT格式的通用方法
+  const convertElementDTOToSSOT = useCallback((elementDTO: any) => {
+    const id = elementDTO.elementId || elementDTO.id
+    return {
+      ...elementDTO,
+      id: id,
+      eClass: elementDTO.eClass,
+      attributes: {
+        declaredName: elementDTO.properties?.declaredName || elementDTO.declaredName,
+        declaredShortName: elementDTO.properties?.declaredShortName || elementDTO.declaredShortName,
+        of: elementDTO.properties?.of || elementDTO.of,
+        source: elementDTO.properties?.source || elementDTO.source,
+        target: elementDTO.properties?.target || elementDTO.target,
+        status: elementDTO.properties?.status || elementDTO.status || 'active',
+        reqId: elementDTO.properties?.reqId || elementDTO.reqId,
+        text: elementDTO.properties?.text || elementDTO.text,
+        ...elementDTO.properties,
+        ...elementDTO
+      }
+    }
+  }, [])
+
+  // 按类型加载元素（使用高级查询API）
+  const loadElementsByType = useCallback(async (eClass: string, params: QueryParams = {}): Promise<void> => {
     setLoading(true)
     setError(null)
     try {
-      const response = await queryElementsByType(eClass, params)
-      const elementsToAdd = (response.data || []).reduce((acc, element) => {
-        // 使用 elementId 作为 key，并将整个元素数据存储
-        const id = element.elementId || element.id
-        acc[id] = {
-          ...element,
-          id: id,  // 确保有 id 字段
-          attributes: {
-            declaredName: element.declaredName,
-            declaredShortName: element.declaredShortName,
-            of: element.of,
-            source: element.source,
-            target: element.target,
-            status: element.status || 'active',
-            ...element  // 保留所有其他属性
-          }
-        }
+      const response = await queryByType(eClass, params)
+      
+      // 更新分页信息
+      setPagination({
+        page: response.page,
+        size: response.size,
+        totalElements: response.totalElements,
+        totalPages: response.totalPages,
+        first: response.first,
+        last: response.last
+      })
+      
+      const elementsToAdd = response.content.reduce((acc, elementDTO) => {
+        const element = convertElementDTOToSSOT(elementDTO)
+        acc[element.id] = element
         return acc
       }, {} as Record<string, ElementData>)
       
@@ -259,48 +308,59 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
         ...elementsToAdd
       }))
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(`加载${eClass}类型元素失败`)
-      setError(error)
-      throw error
+      setError(err as Error)
+      throw err
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [convertElementDTOToSSOT])
 
-  // 加载所有元素
-  const loadAllElements = useCallback(async (params?: any): Promise<void> => {
+  // 加载所有元素（使用高级查询API）
+  const loadAllElements = useCallback(async (params: QueryParams = {}): Promise<void> => {
     setLoading(true)
     setError(null)
     try {
-      const response = await queryAllElements(params)
-      const elementsToAdd = (response.data || []).reduce((acc, element) => {
-        // 使用 elementId 作为 key，并将整个元素数据存储
-        const id = element.elementId || element.id
-        acc[id] = {
-          ...element,
-          id: id,  // 确保有 id 字段
-          attributes: {
-            declaredName: element.declaredName,
-            declaredShortName: element.declaredShortName,
-            of: element.of,
-            source: element.source,
-            target: element.target,
-            status: element.status || 'active',
-            ...element  // 保留所有其他属性
-          }
-        }
+      // 设置默认分页参数
+      const queryParams: QueryParams = {
+        page: 0,
+        size: 50,
+        ...params
+      }
+      
+      const response = await queryAdvanced(queryParams)
+      
+      // 更新分页信息
+      setPagination({
+        page: response.page,
+        size: response.size,
+        totalElements: response.totalElements,
+        totalPages: response.totalPages,
+        first: response.first,
+        last: response.last
+      })
+      
+      const elementsToAdd = response.content.reduce((acc, elementDTO) => {
+        const element = convertElementDTOToSSOT(elementDTO)
+        acc[element.id] = element
         return acc
       }, {} as Record<string, ElementData>)
       
-      setElementsState(elementsToAdd)
+      // 如果是第一页，替换所有元素；否则合并
+      if (queryParams.page === 0) {
+        setElementsState(elementsToAdd)
+      } else {
+        setElementsState(prev => ({
+          ...prev,
+          ...elementsToAdd
+        }))
+      }
     } catch (err) {
-      const error = err instanceof Error ? err : new Error('加载所有元素失败')
-      setError(error)
-      throw error
+      setError(err as Error)
+      throw err
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [convertElementDTOToSSOT])
 
   // 元素选择
   const selectElement = useCallback((id: string, multiSelect = false) => {
@@ -328,6 +388,68 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
   const setElements = useCallback((newElements: Record<string, ElementData>) => {
     setElementsState(newElements)
   }, [])
+
+  // 搜索需求的便利方法
+  const searchRequirements = useCallback(async (searchTerm: string, params: Omit<QueryParams, 'search'> = {}): Promise<void> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await apiSearchRequirements(searchTerm, params)
+      
+      setPagination({
+        page: response.page,
+        size: response.size,
+        totalElements: response.totalElements,
+        totalPages: response.totalPages,
+        first: response.first,
+        last: response.last
+      })
+      
+      const elementsToAdd = response.content.reduce((acc, elementDTO) => {
+        const element = convertElementDTOToSSOT(elementDTO)
+        acc[element.id] = element
+        return acc
+      }, {} as Record<string, ElementData>)
+      
+      setElementsState(elementsToAdd)
+    } catch (err) {
+      setError(err as Error)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [convertElementDTOToSSOT])
+
+  // 获取已批准需求的便利方法
+  const getApprovedRequirements = useCallback(async (params: Omit<QueryParams, 'filter'> = {}): Promise<void> => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await apiGetApprovedRequirements(params)
+      
+      setPagination({
+        page: response.page,
+        size: response.size,
+        totalElements: response.totalElements,
+        totalPages: response.totalPages,
+        first: response.first,
+        last: response.last
+      })
+      
+      const elementsToAdd = response.content.reduce((acc, elementDTO) => {
+        const element = convertElementDTOToSSOT(elementDTO)
+        acc[element.id] = element
+        return acc
+      }, {} as Record<string, ElementData>)
+      
+      setElementsState(elementsToAdd)
+    } catch (err) {
+      setError(err as Error)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [convertElementDTOToSSOT])
 
   // 刷新项目
   const refreshProject = useCallback(async () => {
@@ -445,11 +567,14 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
     selectedIds,
     loading,
     error,
+    pagination,
     createElement,
     updateElement,
     deleteElement,
     loadElementsByType,
     loadAllElements,
+    searchRequirements,
+    getApprovedRequirements,
     selectElement,
     clearSelection,
     setElements,
@@ -478,5 +603,6 @@ export type {
   TableRowData, 
   GraphViewData, 
   GraphNodeData, 
-  GraphEdgeData 
+  GraphEdgeData,
+  PaginationInfo
 }

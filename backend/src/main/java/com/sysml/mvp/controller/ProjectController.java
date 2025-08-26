@@ -1,84 +1,116 @@
 package com.sysml.mvp.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sysml.mvp.service.ProjectService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
- * 项目控制器 - TDD重构实现
- * 实现REQ-B3-1, REQ-B3-2, REQ-B3-3项目导入导出功能
+ * 项目控制器 - 负责项目导入导出功能
+ * 
+ * 需求实现：
+ * - REQ-B3-1: 导出JSON项目文件 - GET /api/v1/projects/{pid}/export
+ * - REQ-B3-2: 导入JSON项目文件 - POST /api/v1/projects/{pid}/import
+ * - REQ-B3-3: 导入导出一致性保证 - ID稳定性和引用完整性
  */
 @Slf4j
 @RestController
-@RequestMapping("/projects")
-@RequiredArgsConstructor
+@RequestMapping("/api/v1/projects")
 public class ProjectController {
-
+    
     private final ProjectService projectService;
-
+    private final ObjectMapper objectMapper;
+    
+    public ProjectController(ProjectService projectService, ObjectMapper objectMapper) {
+        this.projectService = projectService;
+        this.objectMapper = objectMapper;
+    }
+    
     /**
-     * REQ-B3-1: GET /projects/{pid}/export
-     * 导出项目JSON，附规范文件名
+     * 【REQ-B3-1】导出项目
+     * @param projectId 项目ID
+     * @return JSON格式的项目数据，带标准文件名
      */
     @GetMapping("/{pid}/export")
-    public ResponseEntity<String> exportProject(@PathVariable String pid) {
-        log.info("导出项目: {}", pid);
-        
+    public ResponseEntity<?> exportProject(@PathVariable("pid") String projectId) {
         try {
-            // 使用ProjectService导出项目
-            String json = projectService.exportProject(pid);
+            log.info("导出项目请求: {}", projectId);
             
-            // 设置Content-Disposition头，包含规范文件名
+            Map<String, Object> exportData = projectService.exportProject(projectId);
+            
+            // 设置响应头 - REQ-B3-1要求的文件名格式
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Content-Disposition", "attachment; filename=\"project-" + pid + ".json\"");
+            headers.set("Content-Disposition", String.format("attachment; filename=\"project-%s.json\"", projectId));
             
-            return new ResponseEntity<>(json, headers, HttpStatus.OK);
-            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(exportData);
+                    
+        } catch (IllegalArgumentException e) {
+            log.warn("导出项目失败: {}", e.getMessage());
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Not Found");
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(404).body(error);
         } catch (Exception e) {
-            log.error("导出项目失败: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("导出项目异常", e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Internal Server Error");
+            error.put("message", "Failed to export project");
+            return ResponseEntity.status(500).body(error);
         }
     }
-
+    
     /**
-     * REQ-B3-2: POST /projects/{pid}/import
-     * 导入项目JSON文件
+     * 【REQ-B3-2】导入项目
+     * @param projectId 项目ID
+     * @param file 上传的JSON文件
+     * @return 导入结果信息
      */
     @PostMapping("/{pid}/import")
-    public ResponseEntity<String> importProject(
-            @PathVariable String pid,
+    public ResponseEntity<?> importProject(
+            @PathVariable("pid") String projectId,
             @RequestParam("file") MultipartFile file) {
-        
-        log.info("导入项目: {}, 文件: {}", pid, file.getOriginalFilename());
-        
         try {
-            // 检查文件是否为空
-            if (file.isEmpty()) {
-                return ResponseEntity.badRequest().body("文件不能为空");
+            log.info("导入项目请求: {}, 文件: {}", projectId, file.getOriginalFilename());
+            
+            // 验证文件类型
+            if (!file.getContentType().equals("application/json") && 
+                !file.getOriginalFilename().endsWith(".json")) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", "Bad Request");
+                error.put("message", "File must be JSON format");
+                return ResponseEntity.status(400).body(error);
             }
             
             // 读取文件内容
-            String content = new String(file.getBytes());
+            String jsonContent = new String(file.getBytes());
             
-            // 使用ProjectService导入项目
-            projectService.importProject(pid, content);
+            // 委托给服务层处理
+            Map<String, Object> importResult = projectService.importProject(projectId, jsonContent);
             
-            log.info("项目导入成功: {}", pid);
-            return ResponseEntity.ok("导入成功");
+            return ResponseEntity.ok(importResult);
             
         } catch (IllegalArgumentException e) {
-            // JSON格式错误，包含英文关键词以通过测试
-            return ResponseEntity.badRequest().body("JSON format error at line 1, column 1: invalid json syntax");
+            log.warn("导入项目失败: {}", e.getMessage());
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Bad Request");
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(400).body(error);
         } catch (Exception e) {
-            log.error("导入项目失败: {}", e.getMessage());
-            return ResponseEntity.badRequest().body("导入失败: " + e.getMessage());
+            log.error("导入项目异常", e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Internal Server Error");
+            error.put("message", "Failed to import project");
+            return ResponseEntity.status(500).body(error);
         }
     }
 }
