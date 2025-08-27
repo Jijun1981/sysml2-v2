@@ -111,10 +111,23 @@ const ViewContainer: React.FC = () => {
             <tbody>
               {elementsList.slice(0, 10).map((item: any, index: number) => {
                 const element = item.data || {}
+                const elementId = element.elementId || `item-${index}`
+                const isSelected = selectedIds.has(elementId)
                 return (
-                  <tr key={element.elementId || index} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                    <td style={{ padding: '8px' }}>{element.elementId || '未知'}</td>
-                    <td style={{ padding: '8px' }}>{element.name || '未命名'}</td>
+                  <tr 
+                    key={elementId} 
+                    onClick={() => handleSelect(elementId)}
+                    style={{ 
+                      borderBottom: '1px solid #f0f0f0',
+                      backgroundColor: isSelected ? '#e6f7ff' : 'transparent',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isSelected ? '#e6f7ff' : '#f5f5f5'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isSelected ? '#e6f7ff' : 'transparent'}
+                  >
+                    <td style={{ padding: '8px' }}>{elementId}</td>
+                    <td style={{ padding: '8px' }}>{element.declaredName || element.name || '未命名'}</td>
                     <td style={{ padding: '8px' }}>{item.eClass || '未知类型'}</td>
                     <td style={{ padding: '8px', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {element.documentation || '无文档'}
@@ -136,7 +149,7 @@ const ViewContainer: React.FC = () => {
     return (
       <div style={{ padding: '20px' }}>
         <Title level={4}>依赖关系图</Title>
-        <SimpleGraph onNodeSelect={handleSelect} dataSource={dataSource} />
+        <SimpleGraph onNodeSelect={handleSelect} dataSource={dataSource} selectedIds={selectedIds} />
       </div>
     )
   }
@@ -171,7 +184,7 @@ const ViewContainer: React.FC = () => {
               <SimpleTableView />
             </div>
             <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', overflow: 'hidden', padding: '10px' }}>
-              <SimpleGraph onNodeSelect={handleSelect} dataSource={dataSource} />
+              <SimpleGraph onNodeSelect={handleSelect} dataSource={dataSource} selectedIds={selectedIds} />
             </div>
           </div>
         </div>

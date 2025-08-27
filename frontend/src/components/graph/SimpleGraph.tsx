@@ -18,9 +18,10 @@ import 'reactflow/dist/style.css'
 interface SimpleGraphProps {
   onNodeSelect?: (nodeId: string) => void
   dataSource?: 'small' | 'battery'
+  selectedIds?: Set<string>
 }
 
-const SimpleGraph: React.FC<SimpleGraphProps> = ({ onNodeSelect, dataSource = 'small' }) => {
+const SimpleGraph: React.FC<SimpleGraphProps> = ({ onNodeSelect, dataSource = 'small', selectedIds = new Set() }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [loading, setLoading] = useState(true)
@@ -38,33 +39,39 @@ const SimpleGraph: React.FC<SimpleGraphProps> = ({ onNodeSelect, dataSource = 's
         
         if (data?.content && data.content.length > 0) {
           // 创建节点
-          const newNodes: Node[] = data.content.map((item: any, index: number) => ({
-            id: item.data?.elementId || `node-${index}`,
-            type: 'default',
-            position: { 
-              x: 150 + (index % 3) * 250,
-              y: 100 + Math.floor(index / 3) * 120
-            },
-            data: { 
-              label: (
-                <div style={{ padding: '8px', minWidth: '150px' }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                    {item.data?.reqId || `REQ-${index + 1}`}
+          const newNodes: Node[] = data.content.map((item: any, index: number) => {
+            const nodeId = item.data?.elementId || `node-${index}`
+            const isSelected = selectedIds.has(nodeId)
+            
+            return {
+              id: nodeId,
+              type: 'default',
+              position: { 
+                x: 150 + (index % 3) * 250,
+                y: 100 + Math.floor(index / 3) * 120
+              },
+              data: { 
+                label: (
+                  <div style={{ padding: '8px', minWidth: '150px' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                      {item.data?.reqId || `REQ-${index + 1}`}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      {item.data?.declaredName || '需求名称'}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    {item.data?.declaredName || '需求名称'}
-                  </div>
-                </div>
-              )
-            },
-            style: {
-              background: '#ffffff',
-              border: '2px solid #1890ff',
-              borderRadius: '8px',
-              fontSize: '12px',
-              width: 200
+                )
+              },
+              style: {
+                background: isSelected ? '#e6f7ff' : '#ffffff',
+                border: `2px solid ${isSelected ? '#1890ff' : '#d9d9d9'}`,
+                borderRadius: '8px',
+                fontSize: '12px',
+                width: 200,
+                boxShadow: isSelected ? '0 0 0 2px rgba(24,144,255,0.2)' : 'none'
+              }
             }
-          }))
+          })
 
           // 创建示例边
           const newEdges: Edge[] = []
@@ -99,6 +106,25 @@ const SimpleGraph: React.FC<SimpleGraphProps> = ({ onNodeSelect, dataSource = 's
         setLoading(false)
       })
   }, [setNodes, setEdges, dataSource])
+
+  // 当selectedIds变化时，更新节点样式
+  useEffect(() => {
+    if (nodes.length > 0) {
+      const updatedNodes = nodes.map(node => {
+        const isSelected = selectedIds.has(node.id)
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            background: isSelected ? '#e6f7ff' : '#ffffff',
+            border: `2px solid ${isSelected ? '#1890ff' : '#d9d9d9'}`,
+            boxShadow: isSelected ? '0 0 0 2px rgba(24,144,255,0.2)' : 'none'
+          }
+        }
+      })
+      setNodes(updatedNodes)
+    }
+  }, [selectedIds, setNodes])
 
   const handleNodeClick = (event: React.MouseEvent, node: Node) => {
     console.log('节点点击:', node.id)
