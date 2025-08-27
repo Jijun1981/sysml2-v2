@@ -8,6 +8,8 @@ import { Tabs, Layout, Space, Button, message, Typography } from 'antd'
 import { ModelProvider, useModelContext } from '../contexts/ModelContext'
 import TreeViewSimple from './tree/TreeViewSimple'
 import SimpleGraph from './graph/SimpleGraph'
+import CreateRequirementDialog from './dialogs/CreateRequirementDialog'
+import EditRequirementDialog from './dialogs/EditRequirementDialog'
 
 const { Content, Sider } = Layout
 const { Title } = Typography
@@ -30,6 +32,10 @@ const ViewContainer: React.FC = () => {
   const [demoData, setDemoData] = useState<any>(null)
   const [dataLoading, setDataLoading] = useState(true)
   const [dataSource, setDataSource] = useState<'small' | 'battery'>('small')
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [createDialogType, setCreateDialogType] = useState<'definition' | 'usage'>('definition')
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string>('')
 
   // 根据数据源加载数据
   useEffect(() => {
@@ -240,6 +246,29 @@ const ViewContainer: React.FC = () => {
                 🔄 刷新数据
               </Button>
               
+              <Space.Compact style={{ width: '100%' }}>
+                <Button
+                  onClick={() => {
+                    setCreateDialogType('definition')
+                    setCreateDialogOpen(true)
+                  }}
+                  block
+                  style={{ width: '50%' }}
+                >
+                  ➕ 创建定义
+                </Button>
+                <Button
+                  onClick={() => {
+                    setCreateDialogType('usage')
+                    setCreateDialogOpen(true)
+                  }}
+                  block
+                  style={{ width: '50%' }}
+                >
+                  ➕ 创建使用
+                </Button>
+              </Space.Compact>
+              
               {selectedIds.size > 0 && (
                 <div style={{ 
                   padding: '12px', 
@@ -287,6 +316,31 @@ const ViewContainer: React.FC = () => {
           />
         </div>
       </Content>
+      
+      {/* 创建需求对话框 */}
+      <CreateRequirementDialog
+        open={createDialogOpen}
+        onClose={() => setCreateDialogOpen(false)}
+        onSuccess={() => {
+          handleRefresh()
+          message.success('创建成功')
+        }}
+        type={createDialogType}
+      />
+      
+      {/* 编辑需求对话框 */}
+      <EditRequirementDialog
+        open={editDialogOpen}
+        onClose={() => {
+          setEditDialogOpen(false)
+          setEditingId('')
+        }}
+        onSuccess={() => {
+          handleRefresh()
+          message.success('更新成功')
+        }}
+        requirementId={editingId}
+      />
     </Layout>
   )
 }
