@@ -58,7 +58,7 @@ public class RequirementDTO {
      * 【REQ-C1-4】需求文本/模板文本
      * 对应Pilot documentation字段
      * 支持${placeholder}占位符语法，如：
-     * "The ${subject} shall achieve ${performance} within ${window}."
+     * "The system shall achieve ${performance} within ${window}."
      */
     private String documentation;
     
@@ -74,6 +74,14 @@ public class RequirementDTO {
      * 枚举值：draft, active, deprecated, obsolete
      */
     private String status;
+    
+    /**
+     * 【REQ-C2-1】需求使用基于的定义 (requirementDefinition)
+     * 仅RequirementUsage使用
+     * 引用RequirementDefinition的elementId
+     * SysML 2.0标准字段名
+     */
+    private String requirementDefinition;
     
     /**
      * 需求优先级

@@ -15,7 +15,6 @@ import java.util.stream.Collectors;
  * - REQ-C1-1: reqId唯一性验证 - 创建需求定义时验证reqId唯一性（409冲突）
  * - REQ-C1-3: 更新需求定义
  * - REQ-C2-1: 创建需求使用
- * - REQ-C2-3: 约束对象必填 - RequirementUsage必须有subject
  * - REQ-C2-4: 删除前检查被引用保护 - RequirementDefinition被Usage引用时不能删除
  * 
  * 设计说明：
@@ -75,15 +74,14 @@ public class RequirementService {
     
     /**
      * 【REQ-C2-1】创建RequirementUsage
-     * 验证约束对象必填，然后委托给UniversalElementService
-     * @param usageData 需求使用数据，必须包含subject
+     * 验证必填字段后委托给UniversalElementService创建
+     * @param usageData 需求使用数据
      * @return 创建的需求使用DTO
-     * @throws IllegalArgumentException 如果缺少subject
      */
     public ElementDTO createRequirementUsage(Map<String, Object> usageData) {
-        // 【REQ-C2-3】验证约束对象必填
-        if (!usageData.containsKey("subject") || usageData.get("subject") == null) {
-            throw new IllegalArgumentException("subject is required for RequirementUsage");
+        // 验证requirementDefinition字段必填 - RequirementUsage必须关联到RequirementDefinition
+        if (!usageData.containsKey("requirementDefinition") || usageData.get("requirementDefinition") == null) {
+            throw new IllegalArgumentException("requirementDefinition is required for RequirementUsage");
         }
         
         // 委托给UniversalElementService创建
@@ -101,7 +99,7 @@ public class RequirementService {
         // 【REQ-C2-4】检查被引用保护
         List<ElementDTO> usages = universalElementService.queryElements("RequirementUsage");
         List<ElementDTO> referencingUsages = usages.stream()
-            .filter(usage -> elementId.equals(usage.getProperty("of")))
+            .filter(usage -> elementId.equals(usage.getProperty("requirementDefinition")))
             .collect(Collectors.toList());
         
         if (!referencingUsages.isEmpty()) {
