@@ -23,7 +23,7 @@ import static org.mockito.Mockito.*;
  * - REQ-C1-1: reqId唯一性验证 - 创建需求定义时验证reqId唯一性（409冲突）
  * - REQ-C1-3: 更新需求定义
  * - REQ-C2-1: 创建需求使用
- * - REQ-C2-3: 约束对象必填 - RequirementUsage必须有subject
+ * - REQ-C2-3: 必填字段验证 - RequirementUsage必须关联到RequirementDefinition
  * - REQ-C2-4: 删除前检查被引用保护 - RequirementDefinition被Usage引用时不能删除
  */
 @DisplayName("RequirementService测试 - REQ-B5-1")
@@ -159,22 +159,21 @@ public class RequirementServiceTest {
     
     /**
      * 验收标准：REQ-C2-1
-     * 创建RequirementUsage应验证约束对象必填
+     * 创建RequirementUsage应验证必填字段
      */
     @Test
-    @DisplayName("REQ-C2-1: 创建需求使用验证约束对象")
-    public void testCreateRequirementUsage_ShouldValidateSubjectRequired() {
-        // Given: 包含subject的需求使用数据
+    @DisplayName("REQ-C2-1: 创建需求使用验证必填字段")
+    public void testCreateRequirementUsage_ShouldValidateRequiredFields() {
+        // Given: 包含必填字段的需求使用数据
         Map<String, Object> usageData = new HashMap<>();
-        usageData.put("subject", "part-001");
-        usageData.put("of", "req-def-001");
+        usageData.put("requirementDefinition", "req-def-001");  // RequirementUsage必须关联到RequirementDefinition
         usageData.put("declaredName", "电池温度监控使用");
         
         ElementDTO expectedResult = new ElementDTO();
         expectedResult.setElementId("req-usage-001");
         expectedResult.setEClass("RequirementUsage");
-        expectedResult.setProperty("subject", "part-001");
-        expectedResult.setProperty("of", "req-def-001");
+        expectedResult.setProperty("requirementDefinition", "req-def-001");
+        expectedResult.setProperty("declaredName", "电池温度监控使用");
         
         // When: 创建需求使用
         when(universalElementService.createElement("RequirementUsage", usageData)).thenReturn(expectedResult);
@@ -185,28 +184,28 @@ public class RequirementServiceTest {
         assertNotNull(result);
         assertEquals("req-usage-001", result.getElementId());
         assertEquals("RequirementUsage", result.getEClass());
-        assertEquals("part-001", result.getProperty("subject"));
+        assertEquals("req-def-001", result.getProperty("requirementDefinition"));
         
         verify(universalElementService).createElement("RequirementUsage", usageData);
     }
     
     /**
      * 验收标准：REQ-C2-3
-     * RequirementUsage缺少subject时应抛出异常
+     * RequirementUsage缺少必填字段requirementDefinition时应抛出异常
      */
     @Test
-    @DisplayName("REQ-C2-3: 约束对象必填验证")
-    public void testCreateRequirementUsage_ShouldThrowExceptionWhenSubjectMissing() {
-        // Given: 缺少subject的需求使用数据
+    @DisplayName("REQ-C2-3: 必填字段验证")
+    public void testCreateRequirementUsage_ShouldThrowExceptionWhenRequirementDefinitionMissing() {
+        // Given: 缺少requirementDefinition字段的需求使用数据
         Map<String, Object> usageData = new HashMap<>();
-        usageData.put("of", "req-def-001");
-        usageData.put("declaredName", "缺少subject的使用");
+        usageData.put("declaredName", "缺少requirementDefinition的使用");
+        // 注意: requirementDefinition字段是RequirementUsage关联到RequirementDefinition的必填字段
         
         // When & Then: 应该抛出IllegalArgumentException
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, 
             () -> requirementService.createRequirementUsage(usageData));
         
-        assertTrue(exception.getMessage().contains("subject is required"));
+        assertTrue(exception.getMessage().contains("requirementDefinition is required"));
         
         verify(universalElementService, never()).createElement(anyString(), any());
     }
@@ -224,7 +223,7 @@ public class RequirementServiceTest {
         ElementDTO referencingUsage = new ElementDTO();
         referencingUsage.setElementId("req-usage-001");
         referencingUsage.setEClass("RequirementUsage");
-        referencingUsage.setProperty("of", elementId);
+        referencingUsage.setProperty("requirementDefinition", elementId);
         
         List<ElementDTO> allUsages = Arrays.asList(referencingUsage);
         
@@ -255,7 +254,7 @@ public class RequirementServiceTest {
         ElementDTO otherUsage = new ElementDTO();
         otherUsage.setElementId("req-usage-002");
         otherUsage.setEClass("RequirementUsage");
-        otherUsage.setProperty("of", "req-def-002"); // 引用其他需求定义
+        otherUsage.setProperty("requirementDefinition", "req-def-002"); // 引用其他需求定义
         
         List<ElementDTO> allUsages = Arrays.asList(otherUsage);
         

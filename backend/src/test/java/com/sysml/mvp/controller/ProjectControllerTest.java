@@ -271,7 +271,7 @@ public class ProjectControllerTest {
         Map<String, Object> data = new HashMap<>();
         data.put("elementId", "U-" + usageId);
         data.put("declaredName", "Usage of " + ofId);
-        data.put("of", ofId);
+        data.put("requirementDefinition", ofId);
         element.put("data", data);
         
         return element;

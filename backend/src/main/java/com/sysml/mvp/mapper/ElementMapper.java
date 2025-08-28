@@ -172,6 +172,9 @@ public class ElementMapper {
             reqDto.setSource(getStringProperty(props, "source"));
             reqDto.setRiskLevel(getStringProperty(props, "riskLevel"));
             
+            // 【REQ-C2-1】RequirementUsage特有字段
+            reqDto.setRequirementDefinition(getStringProperty(props, "requirementDefinition"));
+            
             // 时间戳字段
             reqDto.setCreatedAt(getStringProperty(props, "createdAt"));
             reqDto.setUpdatedAt(getStringProperty(props, "updatedAt"));
@@ -235,6 +238,11 @@ public class ElementMapper {
         }
         if (requirementDto.getRiskLevel() != null) {
             data.put("riskLevel", requirementDto.getRiskLevel());
+        }
+        
+        // 【REQ-C2-1】RequirementUsage特有字段
+        if (requirementDto.getRequirementDefinition() != null) {
+            data.put("requirementDefinition", requirementDto.getRequirementDefinition());
         }
         
         return data;
