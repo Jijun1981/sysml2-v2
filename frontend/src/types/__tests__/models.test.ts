@@ -220,10 +220,10 @@ describe('TypeScript类型定义 - 与后端DTO对应', () => {
         nodes: [
           {
             id: 'R-001',
-            label: '系统需求',
+            title: '系统需求',
             type: 'requirement',
-            x: 100,
-            y: 200
+            position: { x: 100, y: 200 },
+            data: { label: '系统需求', type: 'requirement' }
           }
         ],
         edges: [
@@ -239,7 +239,7 @@ describe('TypeScript类型定义 - 与后端DTO对应', () => {
 
       expect(graphData.nodes).toHaveLength(1)
       expect(graphData.edges).toHaveLength(1)
-      expect(graphData.nodes[0].x).toBe(100)
+      expect(graphData.nodes[0].position.x).toBe(100)
       expect(graphData.edges[0].type).toBe('of')
     })
   })

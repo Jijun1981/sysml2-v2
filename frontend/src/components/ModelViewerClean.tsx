@@ -7,6 +7,7 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { Tabs, Layout, Space, Button, message, Typography } from 'antd'
 import { ModelProvider, useModelContext } from '../contexts/ModelContext'
 import TreeViewSimple from './tree/TreeViewSimple'
+import TableView from './table/TableView'
 import SimpleGraph from './graph/SimpleGraph'
 import CreateRequirementDialog from './dialogs/CreateRequirementDialog'
 import EditRequirementDialog from './dialogs/EditRequirementDialog'
@@ -29,51 +30,16 @@ const ViewContainer: React.FC = () => {
   
   const [activeView, setActiveView] = useState('tree')
   const [siderCollapsed, setSiderCollapsed] = useState(false)
-  const [demoData, setDemoData] = useState<any>(null)
-  const [dataLoading, setDataLoading] = useState(true)
-  const [dataSource, setDataSource] = useState<'small' | 'battery'>('small')
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [createDialogType, setCreateDialogType] = useState<'definition' | 'usage'>('definition')
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string>('')
 
-  // 根据数据源加载数据
+  // 初始加载数据
   useEffect(() => {
-    console.log(`开始加载${dataSource === 'battery' ? '电池系统' : '测试'}数据...`)
-    setDataLoading(true)
-    
-    // 根据选择的数据源加载数据
-    const loadDemoData = async () => {
-      try {
-        const url = dataSource === 'battery' 
-          ? 'http://localhost:8080/api/v1/demo/battery-system'
-          : 'http://localhost:8080/api/v1/demo/dataset/small'
-        
-        console.log('正在请求:', url)
-        const response = await fetch(url)
-        console.log('响应状态:', response.status, response.statusText)
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        
-        const data = await response.json()
-        console.log('数据加载成功:', data)
-        setDemoData(data)
-        
-        // 解析数据中的content数组
-        if (data && data.content && Array.isArray(data.content)) {
-          console.log(`找到 ${data.content.length} 个元素`)
-        }
-      } catch (error) {
-        console.error('数据加载失败:', error)
-      } finally {
-        setDataLoading(false)
-      }
-    }
-    
-    loadDemoData()
-  }, [dataSource])
+    console.log('初始化加载后端数据...')
+    loadAllElements()
+  }, [loadAllElements])
 
   // 处理选中事件
   const handleSelect = useCallback((elementId: string, isMultiSelect?: boolean) => {
@@ -86,76 +52,25 @@ const ViewContainer: React.FC = () => {
     }
   }, [selectElement])
 
-  // 刷新数据
-  const handleRefresh = useCallback(() => {
+  // 刷新数据 - 从后端重新加载
+  const handleRefresh = useCallback(async () => {
     clearSelection()
-    loadAllElements()
-    message.success('数据已刷新')
+    try {
+      await loadAllElements()
+      message.success('数据已刷新')
+    } catch (error) {
+      console.error('刷新失败:', error)
+      message.error('刷新失败，请重试')
+    }
   }, [clearSelection, loadAllElements])
 
-  // 简单的表格视图组件
-  const SimpleTableView = () => {
-    // 从demo数据中提取元素列表
-    const elementsList = demoData?.content || []
-    const elementCount = elementsList.length
-    
-    return (
-      <div style={{ padding: '20px' }}>
-        <Title level={4}>表格视图</Title>
-        <p>元素总数: {elementCount}</p>
-        <p>加载状态: {dataLoading ? '加载中...' : '已加载'}</p>
-        {elementsList.length > 0 ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #f0f0f0' }}>
-                <th style={{ padding: '8px', textAlign: 'left' }}>ID</th>
-                <th style={{ padding: '8px', textAlign: 'left' }}>名称</th>
-                <th style={{ padding: '8px', textAlign: 'left' }}>类型</th>
-                <th style={{ padding: '8px', textAlign: 'left' }}>文档</th>
-              </tr>
-            </thead>
-            <tbody>
-              {elementsList.slice(0, 10).map((item: any, index: number) => {
-                const element = item.data || {}
-                const elementId = element.elementId || `item-${index}`
-                const isSelected = selectedIds.has(elementId)
-                return (
-                  <tr 
-                    key={elementId} 
-                    onClick={() => handleSelect(elementId)}
-                    style={{ 
-                      borderBottom: '1px solid #f0f0f0',
-                      backgroundColor: isSelected ? '#e6f7ff' : 'transparent',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isSelected ? '#e6f7ff' : '#f5f5f5'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isSelected ? '#e6f7ff' : 'transparent'}
-                  >
-                    <td style={{ padding: '8px' }}>{elementId}</td>
-                    <td style={{ padding: '8px' }}>{element.declaredName || element.name || '未命名'}</td>
-                    <td style={{ padding: '8px' }}>{item.eClass || '未知类型'}</td>
-                    <td style={{ padding: '8px', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {element.documentation || '无文档'}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <p style={{ color: '#999' }}>{dataLoading ? '加载中...' : '暂无数据'}</p>
-        )}
-      </div>
-    )
-  }
 
   // 使用简化的图视图组件
   const GraphView = () => {
     return (
       <div style={{ padding: '20px' }}>
         <Title level={4}>依赖关系图</Title>
-        <SimpleGraph onNodeSelect={handleSelect} dataSource={dataSource} selectedIds={selectedIds} />
+        <SimpleGraph onNodeSelect={handleSelect} selectedIds={selectedIds} />
       </div>
     )
   }
@@ -165,12 +80,12 @@ const ViewContainer: React.FC = () => {
     {
       key: 'tree',
       label: '🌳 树视图',
-      children: <TreeViewSimple onSelect={handleSelect} dataSource={dataSource} />
+      children: <TreeViewSimple onSelect={handleSelect} />
     },
     {
       key: 'table',
       label: '📊 表格视图',  
-      children: <SimpleTableView />
+      children: <TableView editable={true} selectable={true} />
     },
     {
       key: 'graph',
@@ -183,14 +98,14 @@ const ViewContainer: React.FC = () => {
       children: (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', height: '100%' }}>
           <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', overflow: 'auto' }}>
-            <TreeViewSimple onSelect={handleSelect} showSearch={false} dataSource={dataSource} />
+            <TreeViewSimple onSelect={handleSelect} showSearch={false} />
           </div>
           <div style={{ display: 'grid', gridTemplateRows: '1fr 1fr', gap: '16px' }}>
             <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', overflow: 'auto' }}>
-              <SimpleTableView />
+              <TableView editable={true} selectable={true} size="small" />
             </div>
             <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', overflow: 'hidden', padding: '10px' }}>
-              <SimpleGraph onNodeSelect={handleSelect} dataSource={dataSource} selectedIds={selectedIds} />
+              <SimpleGraph onNodeSelect={handleSelect} selectedIds={selectedIds} />
             </div>
           </div>
         </div>
@@ -210,33 +125,13 @@ const ViewContainer: React.FC = () => {
       >
         <div style={{ padding: '16px', borderBottom: '1px solid #f0f0f0' }}>
           <Title level={4} style={{ margin: 0 }}>
-            {siderCollapsed ? 'MVP' : 'SysML v2 MVP'}
+            {siderCollapsed ? 'SysML' : 'SysML v2 建模平台'}
           </Title>
         </div>
         
         {!siderCollapsed && (
           <div style={{ padding: '16px' }}>
             <Space direction="vertical" style={{ width: '100%' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>数据源</div>
-                <Space.Compact style={{ width: '100%' }}>
-                  <Button
-                    type={dataSource === 'small' ? 'primary' : 'default'}
-                    onClick={() => setDataSource('small')}
-                    style={{ width: '50%' }}
-                  >
-                    测试数据
-                  </Button>
-                  <Button
-                    type={dataSource === 'battery' ? 'primary' : 'default'}
-                    onClick={() => setDataSource('battery')}
-                    style={{ width: '50%' }}
-                  >
-                    🔋 电池系统
-                  </Button>
-                </Space.Compact>
-              </div>
-              
               <Button
                 onClick={handleRefresh}
                 loading={loading}
@@ -255,7 +150,7 @@ const ViewContainer: React.FC = () => {
                   block
                   style={{ width: '50%' }}
                 >
-                  ➕ 创建定义
+                  创建需求定义
                 </Button>
                 <Button
                   onClick={() => {
@@ -265,7 +160,7 @@ const ViewContainer: React.FC = () => {
                   block
                   style={{ width: '50%' }}
                 >
-                  ➕ 创建使用
+                  创建需求使用
                 </Button>
               </Space.Compact>
               
@@ -321,8 +216,8 @@ const ViewContainer: React.FC = () => {
       <CreateRequirementDialog
         open={createDialogOpen}
         onClose={() => setCreateDialogOpen(false)}
-        onSuccess={() => {
-          handleRefresh()
+        onSuccess={async () => {
+          await handleRefresh()
           message.success('创建成功')
         }}
         type={createDialogType}

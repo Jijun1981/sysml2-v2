@@ -1,5 +1,8 @@
-import '@testing-library/jest-dom'
-import { vi } from 'vitest'
+import { vi, expect } from 'vitest'
+import * as matchers from '@testing-library/jest-dom/matchers'
+
+// 扩展vitest的expect
+expect.extend(matchers)
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {

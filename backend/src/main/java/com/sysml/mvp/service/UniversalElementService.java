@@ -3,6 +3,7 @@ package com.sysml.mvp.service;
 import com.sysml.mvp.dto.ElementDTO;
 import com.sysml.mvp.model.EMFModelRegistry;
 import com.sysml.mvp.repository.FileModelRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
  * 3. 所有EMF操作最终委托给PilotEMFService
  * 4. 支持182个SysML EClass类型的通用CRUD
  */
+@Slf4j
 @Service
 public class UniversalElementService {
     
@@ -41,6 +43,9 @@ public class UniversalElementService {
         this.pilotEMFService = pilotEMFService;
         this.fileModelRepository = fileModelRepository;
         this.emfModelRegistry = emfModelRegistry;
+        
+        // 启动时调试元模型字段
+        pilotEMFService.debugMetamodel();
     }
     
     /**
@@ -134,18 +139,32 @@ public class UniversalElementService {
      * @return 是否删除成功
      */
     public boolean deleteElement(String elementId) {
-        EObject eObject = findEObjectById(elementId);
-        if (eObject == null) {
+        String projectId = "default";
+        Resource resource = fileModelRepository.loadProject(projectId);
+        if (resource == null) {
             return false;
         }
         
-        String projectId = "default";
-        Resource resource = fileModelRepository.loadProject(projectId);
-        if (resource != null) {
-            resource.getContents().remove(eObject);
+        // 在同一个Resource中查找并删除对象
+        EObject toDelete = null;
+        List<EObject> contents = resource.getContents();
+        
+        for (EObject obj : contents) {
+            Object id = pilotEMFService.getAttributeValue(obj, "elementId");
+            if (elementId.equals(id)) {
+                toDelete = obj;
+                break;
+            }
+        }
+        
+        if (toDelete != null) {
+            resource.getContents().remove(toDelete);
             fileModelRepository.saveProject(projectId, resource);
+            log.info("删除元素: {} 从项目: {}", elementId, projectId);
             return true;
         }
+        
+        log.warn("未找到要删除的元素: {}", elementId);
         return false;
     }
     

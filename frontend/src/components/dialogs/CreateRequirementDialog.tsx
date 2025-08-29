@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Modal,
   Form,
@@ -11,6 +11,7 @@ import {
 } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { requirementService } from '../../services/requirementService'
+import { errorHandler } from '../../utils/errorHandler'
 
 const { TextArea } = Input
 const { Option } = Select
@@ -18,9 +19,10 @@ const { Option } = Select
 interface CreateRequirementDialogProps {
   open: boolean
   onClose: () => void
-  onSuccess: () => void
+  onSuccess: (newRequirement?: any) => void
   type?: 'definition' | 'usage'
   templateId?: string // 如果是从模板创建
+  definitionId?: string // 如果是创建Usage，基于哪个Definition
 }
 
 const CreateRequirementDialog: React.FC<CreateRequirementDialogProps> = ({
@@ -28,42 +30,82 @@ const CreateRequirementDialog: React.FC<CreateRequirementDialogProps> = ({
   onClose,
   onSuccess,
   type = 'definition',
-  templateId
+  templateId,
+  definitionId
 }) => {
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
   const [tags, setTags] = useState<string[]>([])
   const [inputTag, setInputTag] = useState('')
+  const [definitions, setDefinitions] = useState<any[]>([])
+  const [loadingDefinitions, setLoadingDefinitions] = useState(false)
+
+  // 加载可用的Definition列表
+  useEffect(() => {
+    if (type === 'usage' && open && !definitionId) {
+      loadDefinitions()
+    }
+  }, [type, open, definitionId])
+
+  const loadDefinitions = async () => {
+    try {
+      setLoadingDefinitions(true)
+      const response = await fetch('http://localhost:8080/api/v1/requirements?page=0&size=100')
+      const data = await response.json()
+      const definitionList = data.content || data || []
+      setDefinitions(definitionList)
+    } catch (error) {
+      console.error('加载Definition失败:', error)
+      errorHandler.handleApiError(error as any, '加载需求定义列表失败')
+    } finally {
+      setLoadingDefinitions(false)
+    }
+  }
 
   const handleSubmit = async () => {
+    console.log('handleSubmit called')
     try {
       const values = await form.validateFields()
+      console.log('Form validated, values:', values)
       setLoading(true)
 
       const data = {
         ...values,
+        elementId: values.reqId || `REQ-${Date.now()}`, // 确保有elementId
         tags: tags.length > 0 ? tags : undefined,
         isAbstract: values.isAbstract || false
       }
 
+      let newRequirement
       if (type === 'definition') {
-        await requirementService.createRequirementDefinition(data)
+        newRequirement = await requirementService.createRequirementDefinition(data)
         message.success('需求定义创建成功')
       } else {
-        await requirementService.createRequirementUsage(data)
+        console.log('Creating RequirementUsage')
+        // RequirementUsage必须基于Definition创建
+        const selectedDefId = values.definitionId || definitionId
+        console.log('Selected Definition ID:', selectedDefId)
+        if (!selectedDefId) {
+          throw new Error('必须选择一个需求定义')
+        }
+        
+        const usageData = {
+          ...data,
+          requirementDefinition: selectedDefId // 使用标准化的requirementDefinition字段
+        }
+        delete usageData.definitionId // 移除表单字段，使用'requirementDefinition'代替
+        console.log('Calling createRequirementUsage with:', usageData)
+        newRequirement = await requirementService.createRequirementUsage(usageData)
+        console.log('createRequirementUsage completed')
         message.success('需求使用创建成功')
       }
 
       form.resetFields()
       setTags([])
-      onSuccess()
+      onSuccess(newRequirement)
       onClose()
     } catch (error: any) {
-      if (error.response?.status === 409) {
-        message.error('reqId已存在，请使用其他ID')
-      } else {
-        message.error('创建失败：' + (error.message || '未知错误'))
-      }
+      errorHandler.handleApiError(error)
     } finally {
       setLoading(false)
     }
@@ -88,7 +130,7 @@ const CreateRequirementDialog: React.FC<CreateRequirementDialogProps> = ({
       onCancel={onClose}
       confirmLoading={loading}
       width={600}
-      okText="创建"
+      okText={loading ? "创建中..." : "创建"}
       cancelText="取消"
     >
       <Form
@@ -98,11 +140,11 @@ const CreateRequirementDialog: React.FC<CreateRequirementDialogProps> = ({
       >
         {type === 'definition' && (
           <Form.Item
-            label="需求ID (reqId)"
+            label="需求ID *"
             name="reqId"
             rules={[
               { required: true, message: '请输入需求ID' },
-              { pattern: /^REQ-[\w-]+$/, message: 'ID格式应为REQ-开头' }
+              { pattern: /^REQ-[\w-]+$/, message: '需求ID格式不正确，应以REQ-开头' }
             ]}
             extra="唯一标识符，格式：REQ-XXX"
           >
@@ -119,7 +161,7 @@ const CreateRequirementDialog: React.FC<CreateRequirementDialogProps> = ({
         </Form.Item>
 
         <Form.Item
-          label="名称"
+          label="需求名称 *"
           name="declaredName"
           rules={[
             { required: true, message: '请输入需求名称' },
@@ -130,11 +172,12 @@ const CreateRequirementDialog: React.FC<CreateRequirementDialogProps> = ({
         </Form.Item>
 
         <Form.Item
-          label="需求描述"
-          name="text"
+          label="需求文档 *"
+          name="documentation"
           rules={[
-            { required: true, message: '请输入需求描述' },
-            { max: 2000, message: '描述最多2000个字符' }
+            { required: true, message: '请输入需求文档' },
+            { min: 10, message: '需求文档至少需要10个字符' },
+            { max: 2000, message: '需求文档最多2000个字符' }
           ]}
         >
           <TextArea
@@ -161,6 +204,32 @@ const CreateRequirementDialog: React.FC<CreateRequirementDialogProps> = ({
           </Select>
         </Form.Item>
 
+        <Form.Item
+          label="优先级"
+          name="priority"
+          initialValue="P2"
+        >
+          <Select>
+            <Option value="P0">P0 - 紧急</Option>
+            <Option value="P1">P1 - 高</Option>
+            <Option value="P2">P2 - 中</Option>
+            <Option value="P3">P3 - 低</Option>
+          </Select>
+        </Form.Item>
+
+        <Form.Item
+          label="验证方法"
+          name="verificationMethod"
+          initialValue="test"
+        >
+          <Select>
+            <Option value="test">测试</Option>
+            <Option value="analysis">分析</Option>
+            <Option value="inspection">检查</Option>
+            <Option value="demonstration">演示</Option>
+          </Select>
+        </Form.Item>
+
         {type === 'definition' && (
           <Form.Item
             label="是否为模板"
@@ -172,14 +241,35 @@ const CreateRequirementDialog: React.FC<CreateRequirementDialogProps> = ({
           </Form.Item>
         )}
 
-        {type === 'usage' && templateId && (
-          <Form.Item
-            label="基于模板"
-            extra="此需求使用基于选定的模板创建"
-          >
-            <Input value={templateId} disabled />
-          </Form.Item>
+        {type === 'usage' && (
+          <>
+            <Form.Item
+              label="基于定义 *"
+              name="definitionId"
+              rules={[{ required: true, message: '请选择基于的定义' }]}
+              initialValue={definitionId}
+              extra="RequirementUsage必须基于Definition创建"
+            >
+              {definitionId ? (
+                <Input value={definitionId} disabled />
+              ) : (
+                <Select 
+                  placeholder="选择一个需求定义模板"
+                  loading={loadingDefinitions}
+                  showSearch
+                  optionFilterProp="children"
+                >
+                  {definitions.map(def => (
+                    <Option key={def.elementId} value={def.elementId}>
+                      {def.declaredName || def.reqId || def.elementId}
+                    </Option>
+                  ))}
+                </Select>
+              )}
+            </Form.Item>
+          </>
         )}
+
 
         <Form.Item
           label="标签"

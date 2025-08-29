@@ -1,25 +1,28 @@
 /**
- * TreeView组件 - TDD第六阶段
+ * TreeView组件 - REQ-F2-1: 树视图数据加载修复
  * 
  * 功能特性：
- * - REQ-D1-1: 层级展示，包含/引用关系
+ * - 从requirementService加载真实数据
+ * - 显示RequirementDefinition和RequirementUsage
+ * - Usage节点显示关联的Definition（通过requirementDefinition字段）
+ * - 按类型分组显示
  * - 展开/折叠交互
  * - 选中状态同步
  * - 搜索过滤
  * - 虚拟滚动优化
- * - 键盘导航支持
  */
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
-import { Tree, Input, Typography, Space } from 'antd'
+import { Tree, Input, Typography, Space, Spin, Alert, Badge, Tooltip } from 'antd'
 import { 
   FolderOutlined, 
   FileTextOutlined, 
   SearchOutlined,
-  FolderOpenOutlined 
-} from '../../utils/icons'
+  FolderOpenOutlined,
+  LinkOutlined
+} from '@ant-design/icons'
 import { useModelContext } from '../../contexts/ModelContext'
-import type { TreeViewData, TreeNodeData } from '../../types/models'
+import { requirementService } from '../../services/requirementService'
 import type { TreeProps } from 'antd'
 
 const { Title } = Typography
@@ -31,6 +34,10 @@ interface TreeViewProps {
   multiple?: boolean
   /** 是否支持搜索 */
   searchable?: boolean
+  /** 是否显示过滤 */
+  showFilter?: boolean
+  /** 是否显示详情 */
+  showDetails?: boolean
   /** 是否启用虚拟滚动 */
   virtual?: boolean
   /** 选中的节点keys */
@@ -41,6 +48,20 @@ interface TreeViewProps {
   className?: string
   /** 自定义高度（虚拟滚动时使用） */
   height?: number
+}
+
+// 需求节点数据接口
+interface RequirementNode {
+  elementId: string
+  eClass: string
+  declaredName: string
+  declaredShortName?: string
+  documentation?: string
+  status?: string
+  priority?: string
+  verificationMethod?: string
+  reqId?: string
+  requirementDefinition?: string // 标准化字段
 }
 
 // Ant Design Tree节点数据格式
@@ -59,103 +80,210 @@ interface AntTreeNode {
 const TreeView: React.FC<TreeViewProps> = ({
   multiple = false,
   searchable = true,
+  showFilter = false,
+  showDetails = false,
   virtual = false,
   selectedKeys = [],
   onSelect,
   className = '',
   height = 400
 }) => {
-  const { getTreeViewData, selectElement, selectedIds, loading, error } = useModelContext()
+  const { selectElement, selectedIds } = useModelContext()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [definitions, setDefinitions] = useState<RequirementNode[]>([])
+  const [usages, setUsages] = useState<RequirementNode[]>([])
   const [searchValue, setSearchValue] = useState('')
-  const [expandedKeys, setExpandedKeys] = useState<string[]>([])
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [expandedKeys, setExpandedKeys] = useState<string[]>(['definitions', 'usages'])
   const [autoExpandParent, setAutoExpandParent] = useState(true)
+  const [selectedNode, setSelectedNode] = useState<RequirementNode | null>(null)
 
-  // 获取树视图数据
-  const treeViewData = useMemo(() => {
+  // 加载数据
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    setLoading(true)
+    setError(null)
+    
     try {
-      return getTreeViewData()
-    } catch (err) {
-      console.error('获取树视图数据失败:', err)
-      return { definitions: [] } as TreeViewData
-    }
-  }, [getTreeViewData])
+      // 并行加载Definition和Usage数据
+      const [defResponse, usageResponse] = await Promise.all([
+        requirementService.getRequirementDefinitions(0, 100),
+        requirementService.getRequirementUsages(0, 100)
+      ])
 
-  // 递归构建Ant Design树节点
-  const buildTreeNodes = useCallback((nodes: TreeNodeData[], parentKey = '', searchValue = ''): AntTreeNode[] => {
-    return nodes.map(node => {
-      const nodeKey = node.id
-      const isMatch = searchValue ? node.label.toLowerCase().includes(searchValue.toLowerCase()) : true
-      
-      // 高亮搜索文本
-      const title = searchValue && isMatch ? (
-        <span>
-          {node.label.split(new RegExp(`(${searchValue})`, 'gi')).map((part, index) => 
-            part.toLowerCase() === searchValue.toLowerCase() ? (
-              <mark key={index} style={{ backgroundColor: '#ffc069', padding: 0 }}>
-                {part}
-              </mark>
-            ) : part
+      // 设置数据 - 确保使用标准化字段
+      setDefinitions(defResponse.content || [])
+      setUsages(usageResponse.content || [])
+    } catch (err) {
+      console.error('加载数据失败:', err)
+      setError('加载失败：' + (err as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 创建Definition ID到名称的映射
+  const definitionMap = useMemo(() => {
+    const map = new Map<string, string>()
+    definitions.forEach(def => {
+      map.set(def.elementId, def.declaredName || def.reqId || def.elementId)
+    })
+    return map
+  }, [definitions])
+
+  // 获取状态徽章样式
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'approved': return 'success'
+      case 'implemented': return 'processing'
+      case 'verified': return 'success'
+      case 'draft': return 'default'
+      case 'deprecated': return 'error'
+      default: return 'default'
+    }
+  }
+
+  // 过滤数据
+  const filteredData = useMemo(() => {
+    let filteredDefs = [...definitions]
+    let filteredUsages = [...usages]
+
+    // 搜索过滤
+    if (searchValue) {
+      const searchLower = searchValue.toLowerCase()
+      filteredDefs = filteredDefs.filter(d => 
+        d.declaredName?.toLowerCase().includes(searchLower) ||
+        d.reqId?.toLowerCase().includes(searchLower) ||
+        d.documentation?.toLowerCase().includes(searchLower)
+      )
+      filteredUsages = filteredUsages.filter(u => 
+        u.declaredName?.toLowerCase().includes(searchLower) ||
+        u.documentation?.toLowerCase().includes(searchLower)
+      )
+    }
+
+    // 状态过滤
+    if (statusFilter !== 'all') {
+      filteredDefs = filteredDefs.filter(d => d.status === statusFilter)
+      filteredUsages = filteredUsages.filter(u => u.status === statusFilter)
+    }
+
+    return { definitions: filteredDefs, usages: filteredUsages }
+  }, [definitions, usages, searchValue, statusFilter])
+
+  // 构建树形数据
+  const treeNodes = useMemo(() => {
+    const { definitions: filteredDefs, usages: filteredUsages } = filteredData
+
+    // 构建Definition节点
+    const defNodes: AntTreeNode[] = filteredDefs.map(def => ({
+      key: def.elementId,
+      title: (
+        <span className="tree-node-title">
+          <FileTextOutlined style={{ marginRight: 4 }} />
+          <span className="node-name">{def.declaredName || def.reqId}</span>
+          {def.status && (
+            <Badge 
+              status={getStatusBadge(def.status)} 
+              text={def.status} 
+              style={{ marginLeft: 8 }}
+            />
+          )}
+          {def.priority && (
+            <span className="priority-tag" style={{ marginLeft: 4 }}>
+              {def.priority}
+            </span>
           )}
         </span>
-      ) : node.label
+      ),
+      isLeaf: true,
+      className: 'requirement-definition-node',
+      data: def
+    }))
 
-      // 构建子节点
+    // 构建Usage节点 - 显示关联的Definition
+    const usageNodes: AntTreeNode[] = filteredUsages.map(usage => {
+      const definitionName = usage.requirementDefinition 
+        ? definitionMap.get(usage.requirementDefinition)
+        : null
+
       const children: AntTreeNode[] = []
-      
-      // 添加子Definition节点
-      if (node.children && node.children.length > 0) {
-        children.push(...buildTreeNodes(node.children, nodeKey, searchValue))
-      }
-      
-      // 添加Usage节点
-      if (node.usages && node.usages.length > 0) {
-        const usageNodes = node.usages.map(usage => ({
-          key: usage.id,
-          title: searchValue && usage.label.toLowerCase().includes(searchValue.toLowerCase()) ? (
-            <span>
-              {usage.label.split(new RegExp(`(${searchValue})`, 'gi')).map((part, index) => 
-                part.toLowerCase() === searchValue.toLowerCase() ? (
-                  <mark key={index} style={{ backgroundColor: '#ffc069', padding: 0 }}>
-                    {part}
-                  </mark>
-                ) : part
-              )}
+      if (usage.requirementDefinition && definitionName) {
+        children.push({
+          key: `${usage.elementId}-def-ref`,
+          title: (
+            <span style={{ color: '#8c8c8c', fontSize: '12px' }}>
+              <LinkOutlined /> 基于: {definitionName}
             </span>
-          ) : usage.label,
-          icon: <FileTextOutlined style={{ color: '#1890ff' }} />,
+          ),
           isLeaf: true,
-          selectable: true
-        }))
-        children.push(...usageNodes)
-      }
-
-      // 过滤搜索结果
-      if (searchValue) {
-        const hasMatchingChildren = children.some(child => 
-          child.title && child.title.toString().toLowerCase().includes(searchValue.toLowerCase())
-        )
-        if (!isMatch && !hasMatchingChildren) {
-          return null
-        }
+          selectable: false
+        })
       }
 
       return {
-        key: nodeKey,
-        title,
-        icon: node.type === 'definition' ? 
-          <FolderOutlined style={{ color: '#faad14' }} /> : 
-          <FileTextOutlined style={{ color: '#1890ff' }} />,
+        key: usage.elementId,
+        title: (
+          <span className="tree-node-title">
+            <FileTextOutlined style={{ marginRight: 4 }} />
+            <span className="node-name">{usage.declaredName}</span>
+            {definitionName && (
+              <Tooltip title={`基于: ${definitionName}`}>
+                <span style={{ color: '#1890ff', marginLeft: 8 }}>
+                  → {definitionName}
+                </span>
+              </Tooltip>
+            )}
+            {!usage.requirementDefinition && (
+              <span style={{ color: '#ff4d4f', marginLeft: 8 }}>
+                未关联
+              </span>
+            )}
+            {usage.status && (
+              <Badge 
+                status={getStatusBadge(usage.status)} 
+                text={usage.status} 
+                style={{ marginLeft: 8 }}
+              />
+            )}
+          </span>
+        ),
         children: children.length > 0 ? children : undefined,
-        isLeaf: children.length === 0,
-        selectable: true
+        className: 'requirement-usage-node',
+        data: usage
       }
-    }).filter((node): node is AntTreeNode => node !== null)
-  }, [])
+    })
 
-  // 构建树节点数据
-  const treeNodes = useMemo(() => {
-    return buildTreeNodes(treeViewData.definitions, '', searchValue)
-  }, [treeViewData, buildTreeNodes, searchValue])
+    // 返回分组的树形结构
+    return [
+      {
+        key: 'definitions',
+        title: (
+          <span style={{ fontWeight: 'bold' }}>
+            <FolderOutlined style={{ marginRight: 4 }} />
+            需求定义 ({defNodes.length})
+          </span>
+        ),
+        children: defNodes,
+        className: 'tree-group'
+      },
+      {
+        key: 'usages',
+        title: (
+          <span style={{ fontWeight: 'bold' }}>
+            <FolderOutlined style={{ marginRight: 4 }} />
+            需求使用 ({usageNodes.length})
+          </span>
+        ),
+        children: usageNodes,
+        className: 'tree-group'
+      }
+    ]
+  }, [filteredData, definitionMap, getStatusBadge])
 
   // 获取所有节点的key（用于搜索时展开）
   const getAllKeys = useCallback((nodes: AntTreeNode[]): string[] => {
@@ -191,6 +319,12 @@ const TreeView: React.FC<TreeViewProps> = ({
   // 处理节点选中
   const handleSelect = useCallback((selectedKeysValue: React.Key[], info: any) => {
     const keys = selectedKeysValue as string[]
+    
+    // 获取节点数据
+    const nodeData = info.node.data as RequirementNode | undefined
+    if (nodeData) {
+      setSelectedNode(nodeData)
+    }
     
     // 调用ModelContext的选择逻辑
     if (keys.length > 0) {
@@ -253,16 +387,14 @@ const TreeView: React.FC<TreeViewProps> = ({
 
         {/* 加载状态 */}
         {loading && (
-          <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
-            加载中...
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            <Spin tip="加载中..." />
           </div>
         )}
 
         {/* 错误状态 */}
         {error && (
-          <div style={{ textAlign: 'center', padding: '20px', color: '#ff4d4f' }}>
-            加载失败: {error.message}
-          </div>
+          <Alert message="加载失败" description={error} type="error" showIcon />
         )}
 
         {/* 树组件 */}
@@ -283,6 +415,30 @@ const TreeView: React.FC<TreeViewProps> = ({
         {!loading && !error && treeNodes.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
             {searchValue ? '未找到匹配的需求' : '暂无数据'}
+          </div>
+        )}
+        
+        {/* 节点详情 */}
+        {showDetails && selectedNode && (
+          <div 
+            data-testid="node-details"
+            style={{ 
+              padding: '12px 16px', 
+              borderTop: '1px solid #f0f0f0',
+              background: '#fafafa'
+            }}
+          >
+            <h4>{selectedNode.declaredName}</h4>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {selectedNode.status && <div>状态: {selectedNode.status}</div>}
+              {selectedNode.priority && <div>优先级: {selectedNode.priority}</div>}
+              {selectedNode.verificationMethod && <div>验证方法: {selectedNode.verificationMethod}</div>}
+              {selectedNode.documentation && (
+                <div style={{ marginTop: 8 }}>
+                  文档: {selectedNode.documentation}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </Space>

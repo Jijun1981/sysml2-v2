@@ -106,16 +106,86 @@ public class AdvancedQueryController {
     }
 
     /**
-     * REQ-B5-3 写操作返回405 - 提示使用领域端点
+     * 创建元素
      */
     @PostMapping
-    @PutMapping
-    @DeleteMapping
-    public ResponseEntity<?> writeOperationsNotAllowed() {
-        return ResponseEntity.status(405).body(Map.of(
-            "error", "Method Not Allowed",
-            "message", "请使用领域端点进行写操作，如: /api/v1/requirements, /api/v1/traces 等"
-        ));
+    public ResponseEntity<?> createElement(
+            @RequestBody Map<String, Object> elementData,
+            @RequestParam(defaultValue = "default") String projectId) {
+        try {
+            String eClass = (String) elementData.get("eClass");
+            if (eClass == null) {
+                return ResponseEntity.badRequest().body("eClass is required");
+            }
+            
+            // 添加elementId如果没有
+            if (!elementData.containsKey("elementId")) {
+                elementData.put("elementId", "E-" + UUID.randomUUID().toString().substring(0, 8));
+            }
+            
+            ElementDTO created = universalElementService.createElement(eClass, elementData);
+            return ResponseEntity.ok(created);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to create element: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取元素
+     */
+    @GetMapping("/{elementId}")
+    public ResponseEntity<?> getElement(
+            @PathVariable String elementId,
+            @RequestParam(defaultValue = "default") String projectId) {
+        try {
+            ElementDTO element = universalElementService.findElementById(elementId);
+            if (element != null) {
+                return ResponseEntity.ok(element);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to get element: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 更新元素（支持PUT和PATCH）
+     */
+    @RequestMapping(value = "/{elementId}", method = {RequestMethod.PUT, RequestMethod.PATCH})
+    public ResponseEntity<?> updateElement(
+            @PathVariable String elementId,
+            @RequestBody Map<String, Object> updates,
+            @RequestParam(defaultValue = "default") String projectId) {
+        try {
+            ElementDTO updated = universalElementService.patchElement(elementId, updates);
+            if (updated != null) {
+                return ResponseEntity.ok(updated);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to update element: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 删除元素
+     */
+    @DeleteMapping("/{elementId}")
+    public ResponseEntity<?> deleteElement(
+            @PathVariable String elementId,
+            @RequestParam(defaultValue = "default") String projectId) {
+        try {
+            boolean deleted = universalElementService.deleteElement(elementId);
+            if (deleted) {
+                return ResponseEntity.noContent().build();
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to delete element: " + e.getMessage());
+        }
     }
 
     /**

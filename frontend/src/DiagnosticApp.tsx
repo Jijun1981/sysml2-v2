@@ -59,7 +59,7 @@ const DiagnosticApp: React.FC = () => {
   
   return (
     <div style={{ padding: '20px', fontFamily: 'monospace' }}>
-      <h1>🔍 系统诊断页面</elman1>
+      <h1>🔍 系统诊断页面</h1>
       
       <div style={{ marginTop: '20px', padding: '15px', background: '#f5f5f5', borderRadius: '5px' }}>
         <h2>模块加载状态：</h2>

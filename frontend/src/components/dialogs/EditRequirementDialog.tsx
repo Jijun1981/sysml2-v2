@@ -46,8 +46,10 @@ const EditRequirementDialog: React.FC<EditRequirementDialogProps> = ({
             reqId: data.reqId,
             declaredShortName: data.declaredShortName,
             declaredName: data.declaredName,
-            text: data.text,
+            documentation: data.documentation || data.text,
             status: data.status || 'draft',
+            priority: data.priority || 'P2',
+            verificationMethod: data.verificationMethod || 'test',
             isAbstract: data.isAbstract || false
           })
           setTags(data.tags || [])
@@ -147,16 +149,16 @@ const EditRequirementDialog: React.FC<EditRequirementDialogProps> = ({
           </Form.Item>
 
           <Form.Item
-            label="需求描述"
-            name="text"
+            label="需求文档"
+            name="documentation"
             rules={[
-              { required: true, message: '请输入需求描述' },
-              { max: 2000, message: '描述最多2000个字符' }
+              { required: true, message: '请输入需求文档' },
+              { max: 2000, message: '文档最多2000个字符' }
             ]}
           >
             <TextArea
               rows={4}
-              placeholder="需求的详细描述"
+              placeholder="需求的详细文档"
             />
           </Form.Item>
 
@@ -170,6 +172,30 @@ const EditRequirementDialog: React.FC<EditRequirementDialogProps> = ({
               <Option value="implemented">已实现</Option>
               <Option value="verified">已验证</Option>
               <Option value="deprecated">已废弃</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            label="优先级"
+            name="priority"
+          >
+            <Select>
+              <Option value="P0">P0 - 紧急</Option>
+              <Option value="P1">P1 - 高</Option>
+              <Option value="P2">P2 - 中</Option>
+              <Option value="P3">P3 - 低</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            label="验证方法"
+            name="verificationMethod"
+          >
+            <Select>
+              <Option value="test">测试</Option>
+              <Option value="analysis">分析</Option>
+              <Option value="inspection">检查</Option>
+              <Option value="demonstration">演示</Option>
             </Select>
           </Form.Item>
 

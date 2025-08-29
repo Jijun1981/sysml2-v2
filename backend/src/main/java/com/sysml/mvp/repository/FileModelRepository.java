@@ -67,15 +67,52 @@ public class FileModelRepository {
      * 创建JsonResource（使用sirius-emfjson）
      */
     private JsonResource createJsonResource(URI uri, ResourceSet resourceSet) {
-        // 使用JsonResourceFactoryImpl创建资源
-        JsonResourceFactoryImpl factory = new JsonResourceFactoryImpl();
-        JsonResource resource = (JsonResource) factory.createResource(uri);
-        resourceSet.getResources().add(resource);
-        
-        // 不添加CrossReferenceAdapter，避免null adapter问题
-        // 如果需要处理引用，可以使用EMF内置的解析机制
-        
-        return resource;
+        try {
+            // 使用JsonResourceFactoryImpl创建资源
+            JsonResourceFactoryImpl factory = new JsonResourceFactoryImpl();
+            JsonResource resource = (JsonResource) factory.createResource(uri);
+            
+            // 确保资源有URI
+            if (resource.getURI() == null) {
+                resource.setURI(uri);
+            }
+            
+            // 添加到ResourceSet BEFORE任何操作
+            if (!resourceSet.getResources().contains(resource)) {
+                resourceSet.getResources().add(resource);
+            }
+            
+            // 确保SysML EPackage在ResourceSet中可见
+            ensureSysMLPackageInResourceSet(resourceSet);
+            
+            log.debug("创建JsonResource成功: URI={}, ResourceSet包含{}个资源", 
+                uri, resourceSet.getResources().size());
+            
+            return resource;
+        } catch (Exception e) {
+            log.error("创建JsonResource失败: URI={}", uri, e);
+            throw new RuntimeException("Failed to create JsonResource: " + uri, e);
+        }
+    }
+    
+    /**
+     * 确保SysML EPackage在ResourceSet中可见，解决GsonEObjectDeserializer.getEPackage null问题
+     */
+    private void ensureSysMLPackageInResourceSet(ResourceSet resourceSet) {
+        try {
+            // 创建一个虚拟资源包含SysML EPackage
+            URI sysmlUri = URI.createURI("https://www.omg.org/spec/SysML/20250201");
+            Resource sysmlResource = resourceSet.getResource(sysmlUri, false);
+            
+            if (sysmlResource == null) {
+                // 创建虚拟资源持有SysML EPackage
+                sysmlResource = resourceSet.createResource(sysmlUri);
+                // 注意：不需要实际内容，只需要URI存在于ResourceSet中
+                log.debug("为ResourceSet添加SysML EPackage虚拟资源: {}", sysmlUri);
+            }
+        } catch (Exception e) {
+            log.warn("无法添加SysML EPackage虚拟资源，但这可能不影响功能", e);
+        }
     }
     
     /**
