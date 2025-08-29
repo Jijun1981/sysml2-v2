@@ -193,12 +193,20 @@ const CustomEdge = ({
 
 // 节点类型映射
 const nodeTypes = {
-  custom: CustomNode
+  custom: CustomNode,
+  definition: CustomNode,
+  usage: CustomNode,
+  default: CustomNode
 }
 
 // 边类型映射
 const edgeTypes = {
-  custom: CustomEdge
+  custom: CustomEdge,
+  usage: CustomEdge,
+  satisfy: CustomEdge,
+  derive: CustomEdge,
+  refine: CustomEdge,
+  default: CustomEdge
 }
 
 // GraphView组件属性
@@ -251,13 +259,9 @@ const GraphView: React.FC<GraphViewProps> = ({
   const initialNodes = useMemo(() => {
     return graphData.nodes.map(node => ({
       ...node,
-      type: 'custom',
+      // 保持原始type，用于测试和样式区分
       className: selectedIds.has(node.id) ? 'selected' : '',
-      selected: selectedIds.has(node.id),
-      style: {
-        ...node.style,
-        transform: `translate(${node.position.x}px, ${node.position.y}px)`
-      }
+      selected: selectedIds.has(node.id)
     }))
   }, [graphData.nodes, selectedIds])
 
@@ -265,7 +269,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const initialEdges = useMemo(() => {
     return graphData.edges.map(edge => ({
       ...edge,
-      type: 'custom',
+      // 保持原始type，用于样式区分
       animated: selectedIds.has(edge.source) || selectedIds.has(edge.target),
       className: (selectedIds.has(edge.source) || selectedIds.has(edge.target)) ? 'highlighted' : '',
       selected: selectedIds.has(edge.source) || selectedIds.has(edge.target),
@@ -273,8 +277,7 @@ const GraphView: React.FC<GraphViewProps> = ({
         type: MarkerType.ArrowClosed,
         width: 20,
         height: 20
-      },
-      style: edgeStyles[edge.type as keyof typeof edgeStyles] || {}
+      }
     }))
   }, [graphData.edges, selectedIds])
 

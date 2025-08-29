@@ -286,16 +286,7 @@ export interface TreeNode {
   children?: TreeNode[]
 }
 
-/**
- * @deprecated 使用 GraphNodeData 代替
- */
-export interface GraphNode {
-  id: string
-  type: 'requirement'
-  label: string
-  position: { x: number; y: number }
-  data?: any
-}
+// GraphNode定义已移至文件前部分
 
 /**
  * @deprecated 使用 GraphEdgeData 代替

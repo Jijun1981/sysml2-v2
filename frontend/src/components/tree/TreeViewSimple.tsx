@@ -14,54 +14,52 @@ interface TreeViewProps {
   multiSelect?: boolean
   showSearch?: boolean
   onSelect?: (selectedId: string) => void
-  dataSource?: 'small' | 'battery'
 }
 
 const TreeViewSimple: React.FC<TreeViewProps> = ({
   multiSelect = false,
   showSearch = true,
-  onSelect,
-  dataSource = 'small'
+  onSelect
 }) => {
   const { 
     selectedIds, 
     selectElement,
-    loading 
+    loading,
+    elements 
   } = useModelContext()
   
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([])
   const [searchValue, setSearchValue] = useState('')
-  const [demoData, setDemoData] = useState<any[]>([])
 
-  // 加载demo数据
+  // 使用ModelContext中的elements数据
   useEffect(() => {
-    const url = dataSource === 'battery' 
-      ? 'http://localhost:8080/api/v1/demo/battery-system'
-      : 'http://localhost:8080/api/v1/demo/dataset/small'
-    
-    fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        console.log('TreeView - Demo数据加载成功', data)
-        if (data?.content) {
-          // 转换demo数据为树结构
-          const treeNodes = data.content.map((item: any) => ({
-            key: item.data?.elementId || Math.random().toString(),
-            title: item.data?.declaredName || item.data?.reqId || item.data?.documentation || '未命名元素',
-            children: []
-          }))
-          console.log('TreeView - 转换后的树节点:', treeNodes)
-          setDemoData(treeNodes)
-          // 默认展开所有节点
-          setExpandedKeys(treeNodes.map((n: any) => n.key))
-        }
-      })
-      .catch(err => console.error('TreeView数据加载失败:', err))
-  }, [dataSource])
+    if (elements && Object.keys(elements).length > 0) {
+      console.log('TreeView - 使用ModelContext数据', Object.keys(elements).length, '个元素')
+      // 展开所有节点
+      const allKeys = Object.keys(elements)
+      setExpandedKeys(allKeys)
+    }
+  }, [elements])
 
+  // 转换为树结构
   const treeData = useMemo(() => {
-    return demoData
-  }, [demoData])
+    if (!elements || Object.keys(elements).length === 0) return []
+    
+    const treeNodes = Object.values(elements).map((item: any) => ({
+      key: item.id || item.elementId,
+      title: item.attributes?.declaredName || 
+             item.attributes?.reqId || 
+             item.declaredName || 
+             item.reqId || 
+             item.attributes?.documentation || 
+             item.documentation || 
+             '未命名元素',
+      children: []
+    }))
+    
+    console.log('TreeView - 转换后的树节点:', treeNodes)
+    return treeNodes
+  }, [elements])
 
   const handleSelect: TreeProps['onSelect'] = useCallback((selectedKeys, info) => {
     const key = info.node.key as string
@@ -88,7 +86,7 @@ const TreeViewSimple: React.FC<TreeViewProps> = ({
         />
       )}
       <Tree
-        treeData={treeData as any}
+        treeData={treeData}
         selectedKeys={Array.from(selectedIds)}
         expandedKeys={expandedKeys}
         onSelect={handleSelect}

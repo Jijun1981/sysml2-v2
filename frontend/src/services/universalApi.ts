@@ -216,8 +216,7 @@ export const handleUniversalApiError = (error: any): ApiError => {
 // 导出客户端实例供高级用法
 export default universalApiClient
 
-// 便利类型定义导出
-export type { ElementData, QueryResponse, ApiError }
+// 便利类型定义导出（已在文件顶部导出，这里移除重复）
 
 /**
  * REQ-B5-4: 零代码扩展能力

@@ -14,6 +14,11 @@ import {
   type QueryParams,
   type AdvancedQueryResponse 
 } from '../services/advancedQueryApi'
+import { 
+  type GraphViewData, 
+  type GraphNodeData, 
+  type GraphEdgeData 
+} from '../types/models'
 
 /**
  * 模型上下文接口 - 基于通用接口的SSOT实现
@@ -90,26 +95,7 @@ interface TableRowData {
   [key: string]: any
 }
 
-interface GraphViewData {
-  nodes: GraphNodeData[]
-  edges: GraphEdgeData[]
-}
-
-interface GraphNodeData {
-  id: string
-  label: string
-  type: string
-  x?: number
-  y?: number
-}
-
-interface GraphEdgeData {
-  id: string
-  source: string
-  target: string
-  type: string
-  label?: string
-}
+// GraphViewData等类型定义已移至 types/models.ts
 
 const ModelContext = createContext<ModelContextType | undefined>(undefined)
 
@@ -260,20 +246,27 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
 
   // ElementDTO转换为SSOT格式的通用方法
   const convertElementDTOToSSOT = useCallback((elementDTO: any) => {
-    const id = elementDTO.elementId || elementDTO.id
+    // 确保使用唯一ID
+    const id = elementDTO.elementId || elementDTO.id || `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     return {
       ...elementDTO,
       id: id,
-      eClass: elementDTO.eClass,
+      eClass: elementDTO.eClass || elementDTO.eclass, // 兼容小写的eclass
       attributes: {
+        // 标准化字段映射
         declaredName: elementDTO.properties?.declaredName || elementDTO.declaredName,
         declaredShortName: elementDTO.properties?.declaredShortName || elementDTO.declaredShortName,
-        of: elementDTO.properties?.of || elementDTO.of,
+        documentation: elementDTO.properties?.documentation || elementDTO.documentation || elementDTO.properties?.text || elementDTO.text,
+        requirementDefinition: elementDTO.properties?.requirementDefinition || elementDTO.requirementDefinition || elementDTO.properties?.of || elementDTO.of,
         source: elementDTO.properties?.source || elementDTO.source,
         target: elementDTO.properties?.target || elementDTO.target,
         status: elementDTO.properties?.status || elementDTO.status || 'active',
+        priority: elementDTO.properties?.priority || elementDTO.priority,
+        verificationMethod: elementDTO.properties?.verificationMethod || elementDTO.verificationMethod,
         reqId: elementDTO.properties?.reqId || elementDTO.reqId,
-        text: elementDTO.properties?.text || elementDTO.text,
+        // 保持向后兼容性
+        text: elementDTO.properties?.documentation || elementDTO.documentation || elementDTO.properties?.text || elementDTO.text,
+        of: elementDTO.properties?.requirementDefinition || elementDTO.requirementDefinition || elementDTO.properties?.of || elementDTO.of,
         ...elementDTO.properties,
         ...elementDTO
       }
@@ -470,7 +463,7 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
         label: def.attributes.declaredName || def.attributes.declaredShortName || def.id,
         type: 'definition',
         usages: Object.values(elements)
-          .filter(element => element.eClass === 'RequirementUsage' && element.attributes.of === def.id)
+          .filter(element => element.eClass === 'RequirementUsage' && (element.attributes.requirementDefinition === def.id || element.attributes.of === def.id))
           .map(usage => ({
             id: usage.id,
             label: usage.attributes.declaredName || usage.attributes.declaredShortName || usage.id,
@@ -499,23 +492,51 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
     const edges: GraphEdgeData[] = []
 
     // 创建节点
+    let nodeIndex = 0
     Object.values(elements).forEach(element => {
+      const isDefinition = element.eClass === 'RequirementDefinition'
+      const isUsage = element.eClass === 'RequirementUsage'
+      
+      // 计算节点位置（简单网格布局）
+      const gridSize = Math.ceil(Math.sqrt(Object.keys(elements).length))
+      const x = (nodeIndex % gridSize) * 200 + 100
+      const y = Math.floor(nodeIndex / gridSize) * 150 + 100
+      
       nodes.push({
         id: element.id,
-        label: element.attributes.declaredName || element.attributes.declaredShortName || element.id,
-        type: element.eClass.toLowerCase()
+        type: isDefinition ? 'definition' : (isUsage ? 'usage' : 'default'),
+        position: { x, y },
+        data: {
+          label: element.attributes.declaredName || element.attributes.declaredShortName || element.id,
+          type: element.eClass,
+          status: element.attributes.status,
+          reqId: element.attributes.reqId,
+          properties: element.attributes
+        },
+        style: {
+          backgroundColor: isDefinition ? '#1976d2' : (isUsage ? '#4caf50' : '#757575'),
+          color: '#ffffff',
+          border: '2px solid',
+          borderColor: isDefinition ? '#0d47a1' : (isUsage ? '#2e7d32' : '#424242'),
+          borderRadius: isDefinition ? '8px' : (isUsage ? '50%' : '8px'),
+          padding: '10px',
+          minWidth: '120px',
+          textAlign: 'center'
+        }
       })
+      nodeIndex++
     })
 
     // 创建边
     Object.values(elements).forEach(element => {
-      // RequirementUsage的of关系
-      if (element.eClass === 'RequirementUsage' && element.attributes.of) {
+      // RequirementUsage的requirementDefinition关系（支持新旧字段）
+      const requirementDef = element.attributes.requirementDefinition || element.attributes.of
+      if (element.eClass === 'RequirementUsage' && requirementDef) {
         edges.push({
-          id: `of-${element.id}`,
-          source: element.attributes.of,
+          id: `usage-${element.id}`,
+          source: requirementDef,
           target: element.id,
-          type: 'of',
+          type: 'usage',
           label: 'defines'
         })
       }

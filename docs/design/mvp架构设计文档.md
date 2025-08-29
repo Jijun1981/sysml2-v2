@@ -17,6 +17,9 @@
 * **技术收敛** ：单体架构，文件即模型，单一图形库
 * **快速验证** ：4周可交付，技术风险可控
 * **扩展预留** ：版本字段、时间戳、ID稳定性
+* **分层隔离** ：领域逻辑与技术实现严格分离，领域层不依赖EMF
+* **委托模式** ：领域层通过委托方式使用基础设施层的技术能力
+* **单一职责** ：每层只负责自己的职责，不越界操作
 
 ### 1.2 技术边界（明确不做）
 
@@ -60,11 +63,22 @@
 ┌────────────────────────────────────────────────────────┐
 │                   应用层 (单体)                         │
 │  ┌──────────────────────────────────────────────────┐  │
-│  │         Spring Boot 3.2 + Java 17                │  │
+│  │              Controller层                         │  │
+│  │   /api/v1/elements → AdvancedQueryController     │  │
+│  │   /api/v1/requirements → RequirementController   │  │
+│  │   /api/v1/traces → TraceController               │  │
 │  ├──────────────────────────────────────────────────┤  │
-│  │  UniversalElementController → UniversalElementService → FileRepository │  │
-│  │  EMF Core:  动态EMF，一个接口处理182种类型    │  │
-│  │  Validation: 硬编码3条规则                       │  │
+│  │           领域业务层 (Domain Layer)              │  │
+│  │   RequirementService: 需求业务逻辑              │  │
+│  │   TraceService: 追溯关系管理                    │  │
+│  │   ValidationService: 业务规则验证               │  │
+│  │   ❌ 不直接操作EMF，只处理业务逻辑             │  │
+│  ├────────────↓─────委托─────↓──────────────────────┤  │
+│  │         基础设施层 (Infrastructure Layer)        │  │
+│  │   UniversalElementService: 通用EMF操作          │  │
+│  │   PilotEMFService: EMF元模型和工厂              │  │
+│  │   FileModelRepository: EMF Resource持久化       │  │
+│  │   ✅ 所有EMF操作都在这一层                      │  │
 │  └──────────────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────┘
                         ↓ EMF JSON + FileSystem
@@ -234,9 +248,15 @@ public class FileModelRepository {
 }
 ```
 
-#### 2.2.3 服务层设计（通用接口）
+#### 2.2.3 服务层设计（领域层 + 基础层）
 
+##### A. 基础设施层（UniversalElementService）
 ```java
+/**
+ * 通用元素服务 - 基础设施层
+ * 封装所有EMF操作，为领域层提供技术能力
+ * 领域服务通过委托调用此服务，但不知道EMF细节
+ */
 @Service
 public class UniversalElementService {
     
@@ -249,23 +269,22 @@ public class UniversalElementService {
     @Autowired
     private EMFModelRegistry modelRegistry;
     
-    // 默认项目ID（用于MVP）
-    private static final String DEFAULT_PROJECT_ID = "default";
-    
     /**
-     * REQ-B5-1: 创建任意类型的元素
-     * 通过动态EMF，一个方法处理所有182个SysML类型
+     * 创建元素 - 通用EMF操作
+     * @param eClassName SysML类型名
+     * @param attributes 属性Map（领域层准备的数据）
+     * @return ElementDTO（不返回EObject，隔离EMF）
      */
     public ElementDTO createElement(String eClassName, Map<String, Object> attributes) {
-        // 使用PilotEMFService的工厂方法
+        // EMF操作1：创建EObject
         EObject element = pilotService.createElement(eClassName, attributes);
         
-        // 保存到资源
-        Resource resource = repository.loadProject(DEFAULT_PROJECT_ID);
+        // EMF操作2：持久化
+        Resource resource = repository.loadProject("default");
         resource.getContents().add(element);
-        repository.saveProject(DEFAULT_PROJECT_ID, resource);
+        repository.saveProject("default", resource);
         
-        // 转换为DTO
+        // 返回DTO而不是EObject，隔离EMF对象
         return convertToDTO(element);
     }
     
@@ -362,6 +381,210 @@ public class UniversalElementService {
         return dto;
     }
 }
+
+##### B. 领域业务层（委托模式示例）
+
+**RequirementService - 需求管理领域服务**
+```java
+/**
+ * 需求管理服务 - 领域层
+ * 只处理业务逻辑，不知道EMF存在
+ * 所有技术操作委托给基础层
+ */
+@Service
+public class RequirementService {
+    
+    @Autowired
+    private UniversalElementService elementService;  // 依赖基础层
+    
+    // 注意：没有import任何EMF相关的类
+    
+    /**
+     * 创建需求 - 业务方法
+     */
+    public RequirementDTO createRequirement(CreateRequirementRequest request) {
+        // 步骤1：业务验证（纯业务逻辑）
+        validateBusinessRules(request);
+        checkDuplicateReqId(request.getReqId());
+        
+        // 步骤2：准备数据（普通Map）
+        Map<String, Object> data = new HashMap<>();
+        data.put("elementId", generateRequirementId());
+        data.put("declaredName", request.getName());
+        data.put("reqId", request.getReqId());
+        data.put("documentation", request.getText());
+        
+        // 步骤3：委托给基础层执行（不知道EMF）
+        ElementDTO element = elementService.createElement("RequirementDefinition", data);
+        
+        // 步骤4：转换为领域DTO
+        return convertToRequirementDTO(element);
+    }
+    
+    private void validateBusinessRules(CreateRequirementRequest request) {
+        // 纯业务规则验证
+        if (request.getReqId() == null || request.getReqId().isEmpty()) {
+            throw new BusinessException("reqId is required");
+        }
+        if (request.getName() == null || request.getName().isEmpty()) {
+            throw new BusinessException("name is required");
+        }
+    }
+}
+```
+
+**TraceService - 追溯关系领域服务**
+```java
+/**
+ * 追溯关系服务 - 领域层
+ * 同样不知道EMF，委托给基础层
+ */
+@Service
+public class TraceService {
+    
+    @Autowired
+    private UniversalElementService elementService;
+    
+    /**
+     * 创建追溯关系
+     */
+    public TraceDTO createTrace(String fromId, String toId, String traceType) {
+        // 业务验证
+        validateTraceType(traceType);
+        checkCyclicDependency(fromId, toId);
+        
+        // 准备数据
+        Map<String, Object> data = new HashMap<>();
+        data.put("elementId", generateTraceId());
+        data.put("source", fromId);
+        data.put("target", toId);
+        data.put("kind", traceType);
+        
+        // 委托创建
+        ElementDTO element = elementService.createElement("Dependency", data);
+        
+        return convertToTraceDTO(element);
+    }
+    
+    private void checkCyclicDependency(String fromId, String toId) {
+        // 业务规则：检查是否形成循环依赖
+        // 通过基础层查询，但不直接操作EMF
+        List<ElementDTO> traces = elementService.queryElements("Dependency");
+        // ... 循环检测逻辑
+    }
+}
+```
+
+### 2.3 分层架构设计
+
+#### 2.3.1 架构原则 - 六边形架构思想
+
+MVP采用**六边形架构**（Hexagonal Architecture）思想，实现领域逻辑与技术实现的分离：
+
+```
+         ┌─────────────────────┐
+         │   领域核心（纯净）    │
+         │  RequirementService  │
+         │    TraceService      │
+         │  ValidationService   │
+         │   ❌ 不知道EMF存在    │
+         └──────────┬──────────┘
+                    │ 端口（接口）
+                    ↓
+         ┌─────────────────────┐
+         │   适配器（技术实现）  │
+         │ UniversalElementService │
+         │   PilotEMFService    │
+         │  FileModelRepository  │
+         │   ✅ EMF操作在这里    │
+         └─────────────────────┘
+```
+
+#### 2.3.2 领域层职责
+
+**领域业务层**只关注业务逻辑，不依赖任何技术框架：
+
+```java
+// 领域服务示例 - 完全不知道EMF的存在
+@Service
+public class RequirementService {
+    
+    // 只依赖基础层接口，不import任何EMF类
+    @Autowired
+    private UniversalElementService elementService;
+    
+    // 业务方法
+    public void validateRequirement(RequirementDTO req) {
+        // 纯业务逻辑验证
+        if (req.getReqId() == null || req.getReqId().isEmpty()) {
+            throw new BusinessException("reqId is required");
+        }
+        
+        // 检查重复 - 通过基础层查询，返回的是DTO而不是EObject
+        List<ElementDTO> existing = elementService.queryElements("RequirementDefinition");
+        boolean duplicate = existing.stream()
+            .anyMatch(e -> req.getReqId().equals(e.getProperty("reqId")));
+        if (duplicate) {
+            throw new BusinessException("Duplicate reqId");
+        }
+    }
+}
+```
+
+#### 2.3.3 基础层职责
+
+**基础设施层**封装所有技术细节和EMF操作：
+
+```java
+// 基础层服务 - 所有EMF操作都在这里
+@Service
+public class UniversalElementService {
+    
+    // 这里可以import EMF相关类
+    import org.eclipse.emf.ecore.EObject;
+    import org.eclipse.emf.ecore.resource.Resource;
+    
+    // 提供通用的CRUD能力给领域层使用
+    public ElementDTO createElement(String type, Map<String, Object> data) {
+        // EMF操作：创建EObject
+        EObject eObject = createEObject(type, data);
+        
+        // EMF操作：保存到Resource
+        Resource resource = loadResource();
+        resource.getContents().add(eObject);
+        saveResource(resource);
+        
+        // 转换为DTO返回（隔离EMF对象）
+        return convertToDTO(eObject);
+    }
+}
+```
+
+#### 2.3.4 委托模式实现
+
+领域层通过委托模式使用基础层的能力：
+
+```
+用户请求
+    ↓
+RequirementController
+    ↓
+RequirementService.createRequirement()
+    ├─ validateBusinessRules()     // 业务验证
+    ├─ prepareData()               // 准备数据
+    └─ delegate to ──→ UniversalElementService.createElement()
+                              ├─ createEObject()    // EMF操作
+                              ├─ saveToResource()   // EMF持久化
+                              └─ return DTO         // 返回DTO
+```
+
+#### 2.3.5 分层的好处
+
+1. **技术隔离**：领域层不受EMF版本变化影响
+2. **测试简化**：领域层可以用简单Mock测试，不需要EMF环境
+3. **职责清晰**：业务逻辑和技术实现各司其职
+4. **可替换性**：未来可以替换底层实现（如从EMF换到其他技术）
+5. **团队协作**：业务开发人员不需要学习EMF
 
 @Service
 public class PilotEMFService {
@@ -501,29 +724,76 @@ viewSync.on('element.selected', (id) => {
 
 ### 3.1 CRUD数据流
 
-**通用元素CRUD流程：**
+**分层数据流架构：**
 ```
-用户操作 → React组件 → Fetch API → UniversalElementController 
-    ↓                                      ↓
-状态更新 ← JSON响应 ← UniversalElementService ← FileRepository
-    ↓                     ↓                    ↓
-视图刷新            动态EMF操作           JSON文件
+┌──────────────────────────────────────────────────────────┐
+│                     前端层                                │
+│  用户操作 → React组件 → Fetch API                         │
+│                           ↓                               │
+│              发送请求: {reqId, name, text}                │
+└──────────────────────────────────────────────────────────┘
+                           ↓ HTTP
+┌──────────────────────────────────────────────────────────┐
+│                    Controller层                           │
+│  RequirementController.create(@RequestBody DTO)           │
+│                           ↓                               │
+│              调用: requirementService.create(DTO)         │
+└──────────────────────────────────────────────────────────┘
+                           ↓
+┌──────────────────────────────────────────────────────────┐
+│                   领域业务层                              │
+│  RequirementService {                                     │
+│    1. validateBusinessRules()  // 业务验证               │
+│    2. Map<String,Object> data  // 准备数据               │
+│    3. elementService.create()  // 委托调用               │
+│  }                                                        │
+│  ❌ 不操作EObject，只用Map和DTO                          │
+└──────────────────────────────────────────────────────────┘
+                           ↓ 委托
+┌──────────────────────────────────────────────────────────┐
+│                   基础设施层                              │
+│  UniversalElementService {                                │
+│    1. EObject obj = createEObject(data)  // EMF创建      │
+│    2. resource.getContents().add(obj)    // EMF存储      │
+│    3. return convertToDTO(obj)           // 返回DTO      │
+│  }                                                        │
+│  ✅ 所有EMF操作都在这里                                   │
+└──────────────────────────────────────────────────────────┘
+                           ↓ EMF
+┌──────────────────────────────────────────────────────────┐
+│                    数据存储层                             │
+│              JSON文件 (EMF Resource)                      │
+└──────────────────────────────────────────────────────────┘
 ```
 
-**支持任意SysML类型：**
+**数据转换流程：**
 ```
-创建RequirementDefinition → POST /api/v1/elements {"eClass": "RequirementDefinition"}
-创建PartUsage → POST /api/v1/elements {"eClass": "PartUsage"}
-创建Connection → POST /api/v1/elements {"eClass": "Connection"}
-创建InterfaceDefinition → POST /api/v1/elements {"eClass": "InterfaceDefinition"}
-... 182种类型完全一致的处理流程
+前端DTO → Controller DTO → Map<String,Object> → EObject → JSON
+         ↓                ↓                   ↓         ↓
+      (JSON)          (Java对象)          (EMF对象)  (文件)
 ```
 
-**查询和更新流程：**
+**支持任意SysML类型（完整CRUD）：**
 ```
-按类型查询 → GET /api/v1/elements?type={eClassName} → 动态过滤返回
-部分更新 → PATCH /api/v1/elements/{id} → 动态属性合并 → JSON存储
-删除操作 → DELETE /api/v1/elements/{id} → 移除EMF对象 → 文件保存
+创建元素 → POST /api/v1/elements {"eClass": "RequirementDefinition", ...}
+查询元素 → GET /api/v1/elements?type={eClassName}
+获取单个 → GET /api/v1/elements/{elementId}
+更新元素 → PUT /api/v1/elements/{elementId} {...updates}
+删除元素 → DELETE /api/v1/elements/{elementId}
+
+支持所有182种SysML类型：
+- RequirementDefinition, RequirementUsage
+- PartDefinition, PartUsage
+- InterfaceDefinition, Connection
+- ActionDefinition, StateDefinition
+... 完全一致的处理流程
+```
+
+**领域特定接口（可选，内部委托给UniversalElementService）：**
+```
+需求管理 → /api/v1/requirements → 委托 → UniversalElementService
+追溯管理 → /api/v1/traces → 委托 → UniversalElementService
+项目管理 → /api/v1/projects → 直接处理
 ```
 
 ### 3.2 导入导出流程
@@ -604,11 +874,15 @@ public class ValidationEngine {
 @PostMapping("/interfaces")   // InterfaceDefinition专门接口
 ... 182个专门接口
 
-// 通用方式：一个接口处理所有类型
-@PostMapping("/elements")     // 支持所有182个SysML类型
-{"eClass": "RequirementDefinition"}  // 动态指定类型
-{"eClass": "PartUsage"}
-{"eClass": "InterfaceDefinition"}
+// MVP实现方式：通用接口支持完整CRUD
+@GetMapping("/elements")       // 查询所有或按类型过滤
+@PostMapping("/elements")      // 创建任意类型元素
+@GetMapping("/elements/{id}")  // 获取单个元素
+@PutMapping("/elements/{id}")  // 更新元素
+@DeleteMapping("/elements/{id}") // 删除元素
+
+// 领域接口作为便利层（可选）
+@PostMapping("/requirements")  // 内部调用 universalElementService.createElement("RequirementDefinition", ...)
 ```
 
 ### 4.2 为什么采用完整Pilot元模型而不是简化版？
@@ -965,39 +1239,57 @@ MVP (v0.1) → 性能优化 (v0.2) → 多用户 (v0.3) → 完整模型 (v1.0)
 
 ## 10. 开发规范
 
-### 10.1 代码结构
+### 10.1 代码结构（分层组织）
 
 ```
 backend/
-├── controller/     
-│   ├── UniversalElementController.java  # 通用元素接口（主要）
-│   ├── HealthController.java           # 健康检查
-│   └── ProjectController.java          # 项目管理
-├── service/        
-│   ├── UniversalElementService.java    # 通用元素服务（主要）
-│   ├── PilotEMFService.java           # EMF工厂服务
-│   └── DemoDataGenerator.java         # 演示数据生成
-├── repository/     
-│   └── FileModelRepository.java       # 文件系统数据访问
-├── model/          
-│   └── EMFModelRegistry.java          # EMF元模型注册
-├── dto/            
-│   ├── ElementDTO.java                # 通用元素DTO（主要）
-│   └── 其他专门DTO（兼容性保留）
-└── exception/      # 异常处理
+├── controller/                         # 表现层
+│   ├── AdvancedQueryController.java   # 通用元素REST接口
+│   ├── RequirementController.java     # 需求领域REST接口
+│   ├── TraceController.java          # 追溯领域REST接口
+│   ├── ProjectController.java        # 项目管理接口
+│   └── HealthController.java         # 健康检查
+│
+├── service/                           
+│   ├── domain/                       # 领域业务层（不依赖EMF）
+│   │   ├── RequirementService.java   # 需求业务逻辑
+│   │   ├── TraceService.java        # 追溯业务逻辑
+│   │   ├── ValidationService.java   # 业务规则验证
+│   │   └── ProjectService.java      # 项目管理逻辑
+│   │
+│   └── infrastructure/               # 基础设施层（EMF操作）
+│       ├── UniversalElementService.java  # 通用EMF操作
+│       ├── PilotEMFService.java         # EMF工厂和元模型
+│       └── DemoDataGenerator.java       # 演示数据生成
+│
+├── repository/                        # 持久化层
+│   └── FileModelRepository.java      # EMF Resource文件操作
+│
+├── model/                            # 元模型注册
+│   └── EMFModelRegistry.java        # SysML Pilot元模型
+│
+├── dto/                              # 数据传输对象
+│   ├── ElementDTO.java              # 通用元素DTO
+│   ├── RequirementDTO.java          # 需求DTO
+│   └── TraceDTO.java               # 追溯DTO
+│
+└── exception/                        # 异常处理
+    ├── BusinessException.java       # 业务异常
+    └── TechnicalException.java      # 技术异常
 
 frontend/
 ├── components/     # UI组件
-├── services/       # API调用（使用通用接口）
+├── services/       # API调用
 ├── contexts/       # 状态管理
 ├── utils/          # 工具函数
 └── types/          # TypeScript类型
 ```
 
-**核心简化**：
-- 一个`UniversalElementController`替代多个专门Controller
-- 一个`UniversalElementService`提供所有CRUD功能  
-- 一个`ElementDTO`处理所有182个SysML类型
+**分层原则**：
+1. **domain包**：纯业务逻辑，不import EMF类
+2. **infrastructure包**：所有EMF操作和技术实现
+3. **controller**：只做参数转换和响应封装
+4. **repository**：只在infrastructure层使用
 
 ### 10.2 命名规范
 
