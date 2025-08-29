@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react'
-import { Tabs, Layout, Space, Button, message, Typography } from 'antd'
+import { Tabs, Layout, Space, Button, message, Typography, Empty } from 'antd'
 import { ModelProvider, useModelContext } from '../contexts/ModelContext'
 import TreeViewSimple from './tree/TreeViewSimple'
 import TableView from './table/TableView'
@@ -80,12 +80,106 @@ const ViewContainer: React.FC = () => {
     {
       key: 'tree',
       label: '🌳 树视图',
-      children: <TreeViewSimple onSelect={handleSelect} />
+      children: (
+        <div style={{ 
+          display: 'flex', 
+          height: '100%', 
+          gap: '1px',
+          background: '#f0f0f0'
+        }}>
+          {/* 左侧：双树布局 */}
+          <div style={{ 
+            width: '280px', 
+            background: '#fff',
+            display: 'flex', 
+            flexDirection: 'column',
+            borderRight: '1px solid #d9d9d9'
+          }}>
+            {/* 上部：Usage树 */}
+            <div style={{ 
+              flex: 1, 
+              borderBottom: '1px solid #d9d9d9',
+              overflow: 'auto',
+              background: '#fff'
+            }}>
+              <div style={{ 
+                padding: '8px 12px', 
+                background: '#fafafa',
+                borderBottom: '1px solid #d9d9d9',
+                fontWeight: 500
+              }}>
+                📄 需求使用列表
+              </div>
+              <TreeViewSimple 
+                onSelect={handleSelect} 
+                filterType="usage"
+                placeholder="搜索需求使用..."
+                showSearch={false}
+              />
+            </div>
+            {/* 下部：Definition树 */}
+            <div style={{ 
+              flex: 1, 
+              overflow: 'auto',
+              background: '#fff'
+            }}>
+              <div style={{ 
+                padding: '8px 12px', 
+                background: '#fafafa',
+                borderBottom: '1px solid #d9d9d9',
+                fontWeight: 500
+              }}>
+                📦 需求定义库
+              </div>
+              <TreeViewSimple 
+                onSelect={handleSelect} 
+                filterType="definition"
+                placeholder="搜索需求定义..."
+                showSearch={false}
+              />
+            </div>
+          </div>
+          {/* 右侧：表格视图 */}
+          <div style={{ 
+            flex: 1, 
+            background: '#fff',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <TableView 
+              editable={true} 
+              selectable={true} 
+              pageable={true}
+              pageSize={20}
+              searchable={false}
+              sortable={true}
+              filterable={false}
+              showRelation={true}
+              usageOnly={true}
+              showToolbar={true}
+              size="small"
+              bordered={true}
+            />
+          </div>
+        </div>
+      )
     },
     {
       key: 'table',
       label: '📊 表格视图',  
-      children: <TableView editable={true} selectable={true} />
+      children: <TableView 
+        editable={true} 
+        selectable={true} 
+        pageable={true}
+        pageSize={20}
+        searchable={true}
+        sortable={true}
+        filterable={true}
+        showRelation={true}
+        usageOnly={true}  // REQ-UI-2: 只显示Usage
+        showToolbar={true} // REQ-UI-3: 显示工具栏
+      />
     },
     {
       key: 'graph',
@@ -102,7 +196,15 @@ const ViewContainer: React.FC = () => {
           </div>
           <div style={{ display: 'grid', gridTemplateRows: '1fr 1fr', gap: '16px' }}>
             <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', overflow: 'auto' }}>
-              <TableView editable={true} selectable={true} size="small" />
+              <TableView 
+                editable={true} 
+                selectable={true} 
+                size="small" 
+                pageable={true}
+                pageSize={10}
+                usageOnly={true}
+                showRelation={true}
+              />
             </div>
             <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', overflow: 'hidden', padding: '10px' }}>
               <SimpleGraph onNodeSelect={handleSelect} selectedIds={selectedIds} />

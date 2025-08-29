@@ -70,8 +70,9 @@ public class TraceService {
         // 【REQ-C3-1】验证必填字段
         validateRequiredFields(internalData);
         
-        String source = internalData.get("fromId").toString();
-        String target = internalData.get("toId").toString();
+        // 获取源端和目标端ID，支持标准字段和兼容字段
+        String source = getSourceId(internalData);
+        String target = getTargetId(internalData);
         String type = internalData.get("type").toString();
         
         // 【REQ-C3-3】验证去重
@@ -222,14 +223,21 @@ public class TraceService {
     
     /**
      * 验证追溯关系必填字段
+     * 支持标准的client/supplier字段和兼容的fromId/toId字段
      */
     private void validateRequiredFields(Map<String, Object> traceData) {
-        if (!traceData.containsKey("fromId") || traceData.get("fromId") == null) {
-            throw new IllegalArgumentException("source is required for trace relationship");
+        // 检查源端字段（client或fromId）
+        boolean hasSource = (traceData.containsKey("client") && traceData.get("client") != null) ||
+                           (traceData.containsKey("fromId") && traceData.get("fromId") != null);
+        if (!hasSource) {
+            throw new IllegalArgumentException("client (or fromId for compatibility) is required for trace relationship");
         }
         
-        if (!traceData.containsKey("toId") || traceData.get("toId") == null) {
-            throw new IllegalArgumentException("target is required for trace relationship");
+        // 检查目标端字段（supplier或toId）
+        boolean hasTarget = (traceData.containsKey("supplier") && traceData.get("supplier") != null) ||
+                           (traceData.containsKey("toId") && traceData.get("toId") != null);
+        if (!hasTarget) {
+            throw new IllegalArgumentException("supplier (or toId for compatibility) is required for trace relationship");
         }
         
         if (!traceData.containsKey("type") || traceData.get("type") == null) {
@@ -239,21 +247,65 @@ public class TraceService {
     
     /**
      * 转换API层数据到EMF层数据
-     * 移除API层的type字段，EMF层通过EClass表示类型
+     * - 移除API层的type字段，EMF层通过EClass表示类型
+     * - 将fromId/toId字段转换为标准的client/supplier字段
      */
     private Map<String, Object> convertToEmfData(Map<String, Object> traceData) {
-        Map<String, Object> emfData = new HashMap<>(traceData);
+        Map<String, Object> emfData = new HashMap<>();
         
-        // 移除API层的type字段，EMF层通过EClass表示类型
-        emfData.remove("type");
+        // 设置标准的client/supplier字段
+        emfData.put("client", getSourceId(traceData));
+        emfData.put("supplier", getTargetId(traceData));
+        
+        // 复制其他字段（除了type、fromId、toId）
+        for (Map.Entry<String, Object> entry : traceData.entrySet()) {
+            String key = entry.getKey();
+            if (!"type".equals(key) && !"fromId".equals(key) && !"toId".equals(key) &&
+                !"client".equals(key) && !"supplier".equals(key)) {
+                emfData.put(key, entry.getValue());
+            }
+        }
         
         return emfData;
+    }
+    
+    /**
+     * 获取源端ID，支持标准字段client和兼容字段fromId
+     */
+    private String getSourceId(Map<String, Object> traceData) {
+        if (traceData.containsKey("client") && traceData.get("client") != null) {
+            return traceData.get("client").toString();
+        } else if (traceData.containsKey("fromId") && traceData.get("fromId") != null) {
+            return traceData.get("fromId").toString();
+        }
+        throw new IllegalArgumentException("Neither client nor fromId field found");
+    }
+    
+    /**
+     * 获取目标端ID，支持标准字段supplier和兼容字段toId
+     */
+    private String getTargetId(Map<String, Object> traceData) {
+        if (traceData.containsKey("supplier") && traceData.get("supplier") != null) {
+            return traceData.get("supplier").toString();
+        } else if (traceData.containsKey("toId") && traceData.get("toId") != null) {
+            return traceData.get("toId").toString();
+        }
+        throw new IllegalArgumentException("Neither supplier nor toId field found");
     }
     
     /**
      * 检查追溯关系是否与指定元素相关
      */
     private boolean isTraceRelatedToElement(ElementDTO trace, String elementId) {
+        // 优先使用标准字段client/supplier
+        Object client = trace.getProperty("client");
+        Object supplier = trace.getProperty("supplier");
+        
+        if (client != null || supplier != null) {
+            return elementId.equals(client) || elementId.equals(supplier);
+        }
+        
+        // 兼容旧字段fromId/toId
         Object fromId = trace.getProperty("fromId");
         Object toId = trace.getProperty("toId");
         

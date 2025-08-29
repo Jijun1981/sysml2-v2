@@ -294,6 +294,7 @@ public class PilotEMFService {
         
         // 尝试各种可能的引用字段
         String[] possibleRefFields = {
+            "requirementDefinition",  // SysML 2.0标准字段，优先使用
             "definition",
             "type",
             "typing",
@@ -388,6 +389,100 @@ public class PilotEMFService {
     }
     
     /**
+     * 【REQ-TDD-001-1】设置EMF引用字段（将ID字符串转换为实际引用）
+     */
+    public boolean setReferenceIfExists(EObject eObject, String referenceName, String targetId) {
+        log.debug("尝试设置引用: {}.{} -> {}", eObject.eClass().getName(), referenceName, targetId);
+        
+        EClass eClass = eObject.eClass();
+        EStructuralFeature feature = eClass.getEStructuralFeature(referenceName);
+        log.debug("查找到特征: {} (类型: {})", feature, 
+            feature != null ? feature.getClass().getSimpleName() : "null");
+        
+        if (feature != null && feature instanceof EReference) {
+            EReference reference = (EReference) feature;
+            log.debug("确认是EReference类型，目标类型: {}", reference.getEType().getName());
+            
+            try {
+                // 查找目标对象
+                EObject targetObject = findObjectById(targetId);
+                if (targetObject != null) {
+                    log.debug("找到目标对象: {} (类型: {})", targetId, targetObject.eClass().getName());
+                    eObject.eSet(feature, targetObject);
+                    log.info("成功设置EMF引用: {}.{} -> {} ({})", 
+                        eClass.getName(), referenceName, targetId, targetObject.eClass().getName());
+                    return true;
+                } else {
+                    // 如果找不到目标对象
+                    log.warn("引用目标对象未找到: {} (ObjectFinder是否设置: {}), 字段: {}.{}", 
+                        targetId, objectFinder != null, eClass.getName(), referenceName);
+                    return false;
+                }
+            } catch (Exception e) {
+                log.error("设置引用失败 {}.{}: {}", eClass.getName(), referenceName, e.getMessage(), e);
+            }
+        } else {
+            log.warn("特征 {} 不是EReference类型，而是: {}", referenceName, 
+                feature != null ? feature.getClass().getSimpleName() : "null");
+        }
+        
+        // 如果直接字段不存在，尝试从所有继承的字段中查找
+        for (EStructuralFeature inheritedFeature : eClass.getEAllStructuralFeatures()) {
+            if (referenceName.equals(inheritedFeature.getName()) && inheritedFeature instanceof EReference) {
+                log.debug("从继承特征中找到引用: {}", inheritedFeature.getName());
+                try {
+                    EObject targetObject = findObjectById(targetId);
+                    if (targetObject != null) {
+                        eObject.eSet(inheritedFeature, targetObject);
+                        log.info("成功设置继承引用 {}.{} -> {} (对象引用)", 
+                            eClass.getName(), referenceName, targetId);
+                        return true;
+                    } else {
+                        log.warn("继承引用的目标对象未找到: {}", targetId);
+                    }
+                } catch (Exception e) {
+                    log.error("无法设置继承引用 {}.{}: {}", eClass.getName(), referenceName, e.getMessage(), e);
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    
+    /**
+     * 根据elementId查找对象
+     * 这个方法需要在创建时提供Resource上下文
+     * 在当前架构中，对象查找应该由UniversalElementService提供
+     */
+    private EObject findObjectById(String elementId) {
+        // 在当前设计中，PilotEMFService不直接访问Resource
+        // 这个查找操作应该在UniversalElementService层面处理
+        // 返回null，让UniversalElementService通过setObjectFinder提供查找能力
+        log.trace("查找对象ID: {} (需要Resource上下文，等待外部提供)", elementId);
+        return objectFinder != null ? objectFinder.findById(elementId) : null;
+    }
+    
+    /**
+     * 对象查找器接口
+     * 由上层Service（UniversalElementService）实现并注入
+     */
+    @FunctionalInterface
+    public interface ObjectFinder {
+        EObject findById(String elementId);
+    }
+    
+    private ObjectFinder objectFinder;
+    
+    /**
+     * 设置对象查找器
+     * 由UniversalElementService在操作时注入
+     */
+    public void setObjectFinder(ObjectFinder finder) {
+        this.objectFinder = finder;
+    }
+    
+    /**
      * 安全地获取属性值
      */
     public Object getAttributeValue(EObject eObject, String attributeName) {
@@ -448,9 +543,27 @@ public class PilotEMFService {
             String attrName = entry.getKey();
             Object value = entry.getValue();
             
+            log.debug("处理属性: {} = {} (类型: {})", attrName, value, 
+                value != null ? value.getClass().getSimpleName() : "null");
+            
             // 特殊处理documentation字段
             if ("documentation".equals(attrName) && value instanceof String) {
                 setDocumentation(element, (String) value);
+            } else if ("requirementDefinition".equals(attrName) && value instanceof String) {
+                // 【REQ-TDD-001-1】特殊处理requirementDefinition EMF引用字段
+                log.info("检测到requirementDefinition字段，开始设置EMF引用: {}", value);
+                log.info("当前ObjectFinder是否设置: {}", objectFinder != null);
+                boolean refSet = setReferenceIfExists(element, attrName, (String) value);
+                if (!refSet) {
+                    // 如果无法设置为EMF引用，这是一个错误（应该严格按EMF标准）
+                    log.error("无法为RequirementUsage设置requirementDefinition引用: {}", value);
+                    throw new IllegalArgumentException("引用目标对象未找到: " + value);
+                }
+                // 验证引用是否真的设置成功
+                EStructuralFeature refFeature = element.eClass().getEStructuralFeature("requirementDefinition");
+                Object refValue = refFeature != null ? element.eGet(refFeature) : null;
+                log.info("成功设置requirementDefinition引用: {} -> {} (类型: {})", 
+                    value, refValue, refValue != null ? refValue.getClass().getName() : "null");
             } else {
                 // 尝试设置属性
                 boolean set = setAttributeIfExists(element, attrName, value);

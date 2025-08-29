@@ -14,12 +14,16 @@ interface TreeViewProps {
   multiSelect?: boolean
   showSearch?: boolean
   onSelect?: (selectedId: string) => void
+  filterType?: 'all' | 'definition' | 'usage'
+  placeholder?: string
 }
 
 const TreeViewSimple: React.FC<TreeViewProps> = ({
   multiSelect = false,
   showSearch = true,
-  onSelect
+  onSelect,
+  filterType = 'all',
+  placeholder = '搜索需求'
 }) => {
   const { 
     selectedIds, 
@@ -45,7 +49,21 @@ const TreeViewSimple: React.FC<TreeViewProps> = ({
   const treeData = useMemo(() => {
     if (!elements || Object.keys(elements).length === 0) return []
     
-    const treeNodes = Object.values(elements).map((item: any) => ({
+    // 根据filterType过滤数据
+    let filteredElements = Object.values(elements)
+    if (filterType === 'definition') {
+      filteredElements = filteredElements.filter((item: any) => 
+        item.eClass === 'RequirementDefinition' || 
+        item.attributes?.eClass === 'RequirementDefinition'
+      )
+    } else if (filterType === 'usage') {
+      filteredElements = filteredElements.filter((item: any) => 
+        item.eClass === 'RequirementUsage' || 
+        item.attributes?.eClass === 'RequirementUsage'
+      )
+    }
+    
+    const treeNodes = filteredElements.map((item: any) => ({
       key: item.id || item.elementId,
       title: item.attributes?.declaredName || 
              item.attributes?.reqId || 
@@ -57,9 +75,9 @@ const TreeViewSimple: React.FC<TreeViewProps> = ({
       children: []
     }))
     
-    console.log('TreeView - 转换后的树节点:', treeNodes)
+    console.log(`TreeView (${filterType}) - 转换后的树节点:`, treeNodes)
     return treeNodes
-  }, [elements])
+  }, [elements, filterType])
 
   const handleSelect: TreeProps['onSelect'] = useCallback((selectedKeys, info) => {
     const key = info.node.key as string
@@ -77,11 +95,11 @@ const TreeViewSimple: React.FC<TreeViewProps> = ({
 
   return (
     <div style={{ padding: '16px' }}>
-      <Title level={4}>需求树视图</Title>
+      {!filterType || filterType === 'all' && <Title level={4}>需求树视图</Title>}
       {showSearch && (
         <Search
           style={{ marginBottom: 8 }}
-          placeholder="搜索需求"
+          placeholder={placeholder}
           onChange={e => setSearchValue(e.target.value)}
         />
       )}

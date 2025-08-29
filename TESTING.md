@@ -100,6 +100,95 @@ curl http://localhost:8080/api/v1/requirements | grep "$TEST_ID" || echo "🎉 �
 
 ---
 
+## 📦 核心功能测试清单（2024-08-29更新）
+
+### 1. Requirements管理（必测）
+```bash
+# RequirementDefinition CRUD
+curl -X POST http://localhost:8080/api/v1/requirements \
+  -H "Content-Type: application/json" \
+  -d '{"elementId":"TEST-DEF","reqId":"TEST-DEF","declaredName":"测试定义"}'
+
+# RequirementUsage与引用（新功能！）
+curl -X POST http://localhost:8080/api/v1/requirements/usages \
+  -H "Content-Type: application/json" \
+  -d '{"elementId":"TEST-USE","declaredName":"测试使用","requirementDefinition":"TEST-DEF"}'
+
+# 验证引用关系
+curl http://localhost:8080/api/v1/requirements/usages | grep "requirementDefinition"
+
+# 测试空引用（REQ-TDD-001-4）
+curl -X POST http://localhost:8080/api/v1/requirements/usages \
+  -H "Content-Type: application/json" \
+  -d '{"elementId":"TEST-NULL","declaredName":"无引用"}'
+
+# 测试无效引用（应该报错）
+curl -X POST http://localhost:8080/api/v1/requirements/usages \
+  -H "Content-Type: application/json" \
+  -d '{"elementId":"TEST-ERR","declaredName":"错误引用","requirementDefinition":"NOT-EXIST"}'
+```
+
+### 2. 追溯关系管理
+```bash
+# 创建追溯关系
+curl -X POST http://localhost:8080/api/v1/traces \
+  -H "Content-Type: application/json" \
+  -d '{"elementId":"TRACE-1","sourceId":"TEST-USE","targetId":"TEST-DEF","traceType":"satisfy"}'
+
+# 查询追溯关系
+curl http://localhost:8080/api/v1/traces
+
+# 查询依赖关系
+curl "http://localhost:8080/api/v1/traces/dependencies/TEST-DEF"
+```
+
+### 3. 验证服务
+```bash
+# 运行验证规则
+curl -X POST http://localhost:8080/api/v1/validation/validate \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":"default"}'
+
+# 查看验证结果
+curl http://localhost:8080/api/v1/validation/results
+```
+
+### 4. 项目管理
+```bash
+# 导出项目
+curl -X POST http://localhost:8080/api/v1/projects/default/export \
+  -H "Content-Type: application/json" \
+  -d '{"format":"json"}'
+
+# 导入项目
+curl -X POST http://localhost:8080/api/v1/projects/test-import/import \
+  -H "Content-Type: application/json" \
+  -F "file=@export.json"
+```
+
+### 5. 高级查询（已知问题区域）
+```bash
+# 分层查询（层级关系）
+curl "http://localhost:8080/api/v1/advanced/hierarchy?rootId=TEST-DEF"
+
+# 分页查询
+curl "http://localhost:8080/api/v1/advanced/query?type=RequirementUsage&page=0&size=10"
+
+# 字段标准化验证
+curl http://localhost:8080/api/v1/requirements | jq '.[].elementId' # 应该都有elementId
+```
+
+### 6. Demo数据验证
+```bash
+# 加载demo数据
+curl -X POST http://localhost:8080/api/v1/demo/battery-system
+
+# 验证demo数据
+curl http://localhost:8080/api/v1/requirements | grep "Battery"
+```
+
+---
+
 ## ⚡ 快速测试脚本详解
 
 `./quick-test.sh` 会验证：
@@ -107,6 +196,7 @@ curl http://localhost:8080/api/v1/requirements | grep "$TEST_ID" || echo "🎉 �
 - ✅ 基础CRUD功能正常
 - ✅ 删除功能正常
 - ✅ API响应正常
+- ✅ RequirementDefinition引用功能（新增）
 
 **2分钟内完成，覆盖90%的常见问题**
 
@@ -118,6 +208,7 @@ curl http://localhost:8080/api/v1/requirements | grep "$TEST_ID" || echo "🎉 �
 - [ ] `./quick-test.sh` 显示成功
 - [ ] 删除持久化验证通过（如果改了后端）
 - [ ] 没有破坏现有测试用例
+- [ ] RequirementUsage引用功能正常（如果改了引用相关代码）
 
 ---
 
@@ -156,6 +247,24 @@ curl http://localhost:8080/api/v1/requirements | grep "$TEST_ID" || echo "🎉 �
 - 可以指定特定测试类
 - 最可靠的测试覆盖
 
+### 4. 特定功能测试类（按需运行）
+```bash
+# EMF引用功能测试
+mvn test -Dtest=RequirementDefinitionReferenceTest
+
+# 字段标准化测试
+mvn test -Dtest=FieldStandardizationTest
+
+# 追溯关系测试
+mvn test -Dtest=TraceServiceTest
+
+# 验证服务测试
+mvn test -Dtest=ValidationServiceTest
+
+# 端到端系统测试
+mvn test -Dtest=EndToEndSystemTest
+```
+
 ---
 
 ## 💡 实用技巧
@@ -166,6 +275,7 @@ curl http://localhost:8080/api/v1/requirements | grep "$TEST_ID" || echo "🎉 �
 alias qt="./quick-test.sh"
 alias bt="cd backend && mvn test -q && cd .."
 alias ft="cd frontend && npm test -- --run src/__tests__/simple.test.ts && cd .."
+alias rt="cd backend && mvn test -Dtest=RequirementDefinitionReferenceTest -q && cd .."
 ```
 
 ### 保存测试快照
@@ -181,10 +291,41 @@ diff -r test-snapshots/baseline-20250829 data/projects/default
 ```bash
 # 后端日志
 tail -f backend/logs/application.log
+tail -f backend/backend.log
 
 # 测试日志  
 ls -la logs/
+
+# Spring Boot运行日志
+tail -f backend/sysml-mvp-backend.log
 ```
+
+---
+
+## 🔧 已知问题和解决方案
+
+### 问题1: RequirementDefinition引用不持久化
+**症状**: requirementDefinition字段在重启后丢失
+**解决**: 已通过EMFReferenceHelper后处理机制修复
+**验证**:
+```bash
+# 创建带引用的Usage
+curl -X POST http://localhost:8080/api/v1/requirements/usages \
+  -d '{"elementId":"REF-TEST","declaredName":"引用测试","requirementDefinition":"DEF-PERF"}'
+# 重启服务
+# 验证引用还在
+curl http://localhost:8080/api/v1/requirements/usages | grep "REF-TEST" | grep "DEF-PERF"
+```
+
+### 问题2: 删除操作不持久化
+**症状**: 删除的数据在重启后又出现
+**解决**: 确保FileModelRepository.saveProject被调用
+**验证**: 使用上面的删除持久化验证步骤
+
+### 问题3: 字段名不一致
+**症状**: API返回的字段名不统一
+**解决**: 通过FieldStandardizationService统一处理
+**验证**: 所有API响应都应该有elementId字段
 
 ---
 
@@ -195,6 +336,23 @@ ls -la logs/
 3. **遇到问题再添加相应测试**
 4. **删除持久化是最重要的测试**
 5. **每次提交前至少运行快速测试**
+6. **新功能必须有对应的测试验证**
+
+---
+
+## 📊 测试覆盖率统计
+
+当前测试覆盖的功能模块：
+- ✅ RequirementDefinition CRUD (100%)
+- ✅ RequirementUsage CRUD + 引用关系 (100%)
+- ✅ Trace追溯关系管理 (100%)
+- ✅ Validation验证服务 (100%)
+- ✅ Project项目管理 (导入/导出)
+- ✅ AdvancedQuery高级查询
+- ✅ DemoData示例数据
+- ✅ 字段标准化服务
+- ✅ EMF模型注册和管理
+- ✅ 文件持久化层
 
 ---
 
@@ -206,3 +364,9 @@ ls -la logs/
 - 优化开发流程 → 更新工作流建议
 
 **记住：这个测试体系会随着项目成长而成长！**
+
+最后更新: 2024-08-29
+- 新增RequirementDefinition引用功能测试
+- 新增EMFReferenceHelper相关测试
+- 更新核心功能测试清单
+- 添加已知问题和解决方案

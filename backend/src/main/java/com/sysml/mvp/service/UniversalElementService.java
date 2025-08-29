@@ -6,6 +6,7 @@ import com.sysml.mvp.repository.FileModelRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.springframework.stereotype.Service;
@@ -35,14 +36,17 @@ public class UniversalElementService {
     private final PilotEMFService pilotEMFService;
     private final FileModelRepository fileModelRepository;
     private final EMFModelRegistry emfModelRegistry;
+    private final ReferenceResolverService referenceResolverService;
     
     public UniversalElementService(
             PilotEMFService pilotEMFService,
             FileModelRepository fileModelRepository,
-            EMFModelRegistry emfModelRegistry) {
+            EMFModelRegistry emfModelRegistry,
+            ReferenceResolverService referenceResolverService) {
         this.pilotEMFService = pilotEMFService;
         this.fileModelRepository = fileModelRepository;
         this.emfModelRegistry = emfModelRegistry;
+        this.referenceResolverService = referenceResolverService;
         
         // 启动时调试元模型字段
         pilotEMFService.debugMetamodel();
@@ -61,23 +65,34 @@ public class UniversalElementService {
             throw new IllegalArgumentException("elementId is required");
         }
         
-        // 使用PilotEMFService创建元素（它内部会处理EClass查找）
-        EObject eObject = pilotEMFService.createElement(eClassName, attributes);
-        
-        // 添加到Resource（假设默认项目ID为"default"）
+        // 【REQ-TDD-001-1】获取Resource上下文，为EMF引用解析提供支持
         String projectId = "default";
         Resource resource = fileModelRepository.loadProject(projectId);
-        if (resource != null) {
-            resource.getContents().add(eObject);
-        } else {
+        if (resource == null) {
             throw new IllegalStateException("Project not found: " + projectId);
         }
         
-        // 保存
-        fileModelRepository.saveProject(projectId, resource);
+        // 【REQ-TDD-001-1】为PilotEMFService设置对象查找器
+        pilotEMFService.setObjectFinder(elementId -> 
+            referenceResolverService.findObjectInResource(resource, elementId));
         
-        // 转换为DTO返回
-        return toDTO(eObject);
+        try {
+            // 使用PilotEMFService创建元素（现在可以正确处理引用）
+            EObject eObject = pilotEMFService.createElement(eClassName, attributes);
+            
+            // 添加到Resource
+            resource.getContents().add(eObject);
+            
+            // 保存
+            fileModelRepository.saveProject(projectId, resource);
+            
+            // 转换为DTO返回
+            return toDTO(eObject);
+            
+        } finally {
+            // 清理对象查找器
+            pilotEMFService.setObjectFinder(null);
+        }
     }
     
     /**
@@ -234,22 +249,58 @@ public class UniversalElementService {
     
     /**
      * 内部方法：获取EMF对象的所有属性
-     * 兼容PilotEMFService可能没有getAllAttributes方法的情况
+     * 【REQ-TDD-001-2】支持EMF引用字段的正确序列化
      */
     private Map<String, Object> getAllAttributes(EObject eObject) {
         Map<String, Object> attributes = new HashMap<>();
         
-        // 遍历所有属性特征
+        // 调试：输出当前对象信息
+        log.debug("正在序列化对象: {} (elementId: {})", 
+            eObject.eClass().getName(), pilotEMFService.getAttributeValue(eObject, "elementId"));
+        
+        // 遍历所有结构特征（包括属性和引用）
         for (EStructuralFeature feature : eObject.eClass().getEAllStructuralFeatures()) {
-            if (feature.isDerived() || feature.isTransient()) {
-                continue; // 跳过派生和瞬态属性
+            // 【REQ-TDD-001-2】requirementDefinition虽然是派生/瞬态的，但需要序列化
+            boolean isRequirementDefinition = "requirementDefinition".equals(feature.getName());
+            if (!isRequirementDefinition && (feature.isDerived() || feature.isTransient())) {
+                log.trace("跳过派生/瞬态特征: {}", feature.getName());
+                continue; // 跳过派生和瞬态属性（除了requirementDefinition）
             }
             
             String name = feature.getName();
             Object value = pilotEMFService.getAttributeValue(eObject, name);
             
-            // 只添加可序列化的值，过滤掉EMF内部对象
-            if (value != null && isSerializableValue(value)) {
+            log.trace("处理特征: {} = {} (类型: {}, 是引用: {})", 
+                name, value, feature.getClass().getSimpleName(), feature instanceof EReference);
+            
+            if (value == null) {
+                continue;
+            }
+            
+            // 【REQ-TDD-001-2】特殊处理EMF引用字段
+            if (feature instanceof EReference) {
+                // 这是一个EMF引用，需要转换为目标对象的elementId
+                if (value instanceof EObject) {
+                    EObject referencedObject = (EObject) value;
+                    Object referencedId = pilotEMFService.getAttributeValue(referencedObject, "elementId");
+                    if (referencedId != null) {
+                        attributes.put(name, referencedId.toString());
+                        log.info("EMF引用序列化成功: {}.{} → {}", 
+                            eObject.eClass().getName(), name, referencedId);
+                    } else {
+                        log.warn("EMF引用目标没有elementId: {}.{}", 
+                            eObject.eClass().getName(), name);
+                    }
+                } else {
+                    log.warn("EReference字段值不是EObject: {}.{} = {} ({})", 
+                        eObject.eClass().getName(), name, value, value.getClass());
+                }
+                // 继续处理下一个特征
+                continue;
+            }
+            
+            // 普通属性：只添加可序列化的值，过滤掉EMF内部对象
+            if (isSerializableValue(value)) {
                 attributes.put(name, value);
             }
         }

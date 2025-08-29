@@ -14,6 +14,7 @@ import org.eclipse.sirius.emfjson.resource.JsonResource;
 import org.eclipse.sirius.emfjson.resource.JsonResourceFactoryImpl;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
@@ -22,7 +23,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+// import java.util.concurrent.ConcurrentHashMap; // 移除，不再使用缓存
 import java.util.stream.Collectors;
 
 /**
@@ -39,7 +40,12 @@ public class FileModelRepository {
     
     private final EMFModelRegistry modelRegistry;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final Map<String, ResourceSet> resourceCache = new ConcurrentHashMap<>();
+    
+    // 添加EMF引用助手（可选注入）
+    @Autowired(required = false)
+    private com.sysml.mvp.util.EMFReferenceHelper referenceHelper;
+    // 移除缓存机制，确保每次都加载最新数据
+    // private final Map<String, ResourceSet> resourceCache = new ConcurrentHashMap<>();
     
     @PostConstruct
     public void init() throws IOException {
@@ -60,7 +66,8 @@ public class FileModelRepository {
      * 获取项目文件路径
      */
     private Path getProjectPath(String projectId) {
-        return Paths.get(dataRoot, "projects", projectId, "model.json");
+        // dataRoot已经包含了projects路径，不需要再添加
+        return Paths.get(dataRoot, projectId, "model.json");
     }
     
     /**
@@ -144,9 +151,8 @@ public class FileModelRepository {
     public Resource loadProject(String projectId) {
         Path projectPath = getProjectPath(projectId);
         
-        // 从缓存获取或创建新的ResourceSet
-        ResourceSet resourceSet = resourceCache.computeIfAbsent(projectId, 
-            k -> createConfiguredResourceSet());
+        // 每次都创建新的ResourceSet，确保加载最新数据
+        ResourceSet resourceSet = createConfiguredResourceSet();
         
         // 使用绝对路径创建URI
         URI uri = URI.createFileURI(projectPath.toAbsolutePath().toString());
@@ -189,6 +195,12 @@ public class FileModelRepository {
             options.put(JsonResource.OPTION_SCHEMA_LOCATION, Boolean.TRUE);
             
             resource.save(options);
+            
+            // 【REQ-TDD-001】后处理：添加derived引用到JSON
+            if (referenceHelper != null) {
+                referenceHelper.postProcessJsonFile(projectPath, resource);
+                log.debug("已执行引用后处理");
+            }
             
             // 更新时间戳
             updateProjectTimestamp(projectId);
@@ -314,8 +326,8 @@ public class FileModelRepository {
             // 保存到目标位置
             targetResource.save(options);
             
-            // 更新缓存
-            resourceCache.put(projectId, targetResourceSet);
+            // 缓存已移除，不再需要更新
+            // resourceCache.put(projectId, targetResourceSet);
             
             log.info("导入项目: {} 从 {}", projectId, importPath);
         } catch (IOException e) {
@@ -392,16 +404,18 @@ public class FileModelRepository {
     }
     
     /**
-     * 清除缓存
+     * 清除缓存 - 缓存已移除，此方法保留为空实现以保持兼容性
      */
     public void clearCache(String projectId) {
-        resourceCache.remove(projectId);
+        // 缓存已移除，无需操作
+        log.debug("缓存机制已移除，无需清除缓存: {}", projectId);
     }
     
     /**
-     * 清除所有缓存
+     * 清除所有缓存 - 缓存已移除，此方法保留为空实现以保持兼容性
      */
     public void clearAllCache() {
-        resourceCache.clear();
+        // 缓存已移除，无需操作
+        log.debug("缓存机制已移除，无需清除缓存");
     }
 }

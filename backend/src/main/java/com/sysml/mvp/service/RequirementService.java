@@ -79,10 +79,8 @@ public class RequirementService {
      * @return 创建的需求使用DTO
      */
     public ElementDTO createRequirementUsage(Map<String, Object> usageData) {
-        // 验证requirementDefinition字段必填 - RequirementUsage必须关联到RequirementDefinition
-        if (!usageData.containsKey("requirementDefinition") || usageData.get("requirementDefinition") == null) {
-            throw new IllegalArgumentException("requirementDefinition is required for RequirementUsage");
-        }
+        // 【REQ-TDD-001-4】requirementDefinition字段是可选的
+        // 如果提供了，验证其存在性会在PilotEMFService中进行
         
         // 委托给UniversalElementService创建
         return universalElementService.createElement("RequirementUsage", usageData);

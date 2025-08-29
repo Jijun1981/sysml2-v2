@@ -90,6 +90,294 @@ epics:
     test_coverage: "前后端集成测试、三视图联动测试"
     latest_enhancement: "删除持久化修复"
 
+# 详细需求-代码-测试追踪关系
+requirements_traceability:
+  # MVP核心需求（从tracking-matrix.yaml）
+  core_requirements:
+    - id: REQ-C1-1
+      story: STORY-C1
+      title: "创建RequirementDefinition"
+      priority: P0
+      status: "完成"
+      implementation_files:
+        backend:
+          - "RequirementController.java"
+          - "RequirementService.java"
+          - "RequirementDTO.java"
+        frontend:
+          - "requirementService.ts"
+          - "CreateRequirementDialog.tsx"
+      test_coverage:
+        test_files:
+          - "RequirementControllerTest.java"
+          - "RequirementServiceTest.java"
+          - "RequirementCRUD.integration.test.tsx"
+        test_methods: 12
+        coverage_details: "POST接口、字段验证、重复ID检测"
+    
+    - id: REQ-C2-1
+      story: STORY-C2
+      title: "创建需求使用"
+      priority: P0
+      status: "完成"
+      field_changes: "of → requirementDefinition"
+      implementation_files:
+        backend:
+          - "RequirementService.java"
+          - "ElementMapper.java"
+        frontend:
+          - "requirementService.ts"
+      test_coverage:
+        test_files:
+          - "RequirementServiceTest.java"
+          - "RequirementControllerTest.java"
+          - "RequirementUsageFinal.test.tsx"
+        test_methods: 8
+        coverage_details: "requirementDefinition字段验证"
+    
+    - id: REQ-C2-3
+      story: STORY-C2
+      title: "约束对象必填约束"
+      priority: P0
+      status: "已删除"
+      field_changes: "subject字段删除"
+      test_coverage:
+        status: "测试已更新"
+        test_files:
+          - "RequirementServiceTest.java"
+        test_methods: 2
+        coverage_details: "改为验证requirementDefinition必填"
+    
+    - id: REQ-C3-1
+      story: STORY-C3
+      title: "创建Trace关系"
+      priority: P0
+      status: "完成"
+      implementation_files:
+        backend:
+          - "TraceController.java"
+          - "TraceService.java"
+          - "TraceDTO.java"
+      test_coverage:
+        test_files:
+          - "TraceControllerTest.java"
+          - "TraceServiceTest.java"
+        test_methods: 12
+        coverage_details: "四种trace类型验证"
+    
+    - id: REQ-D1-1
+      story: STORY-D1
+      title: "reqId唯一性验证"
+      priority: P0
+      status: "完成"
+      implementation_files:
+        backend:
+          - "ValidationService.java"
+          - "ValidationController.java"
+      test_coverage:
+        test_files:
+          - "ValidationServiceTest.java"
+          - "ValidationControllerTest.java"
+        test_methods: 6
+        coverage_details: "重复ID检测、409响应"
+    
+  # 字段标准化需求（从tracking-matrix.yaml）
+  field_standardization:
+    - id: REQ-FS-1
+      epic: EPIC-FS
+      title: "字段分类标准化"
+      priority: P0
+      status: "完成"
+      description: "M2核心字段vs Metadata治理字段分离"
+      implementation_files:
+        - "PilotEMFService.java"
+        - "UniversalElementService.java"
+        - "MetadataService.java"
+      test_coverage:
+        test_files:
+          - "FieldStandardizationTest.java"
+        test_methods: 6
+        coverage_details: "字段分类正确性验证"
+    
+    - id: REQ-FS-2
+      epic: EPIC-FS
+      title: "标准字段映射修复"
+      priority: P0
+      status: "完成"
+      description: "of → requirementDefinition字段映射"
+      implementation_files:
+        - "RequirementDTO.java"
+        - "RequirementService.java"
+        - "ElementMapper.java"
+      test_coverage:
+        test_files:
+          - "FieldStandardizationTest.java"
+          - "RequirementServiceTest.java"
+        test_methods: 7
+        coverage_details: "字段映射正确性和向后兼容性"
+      affected_files:
+        - "RequirementServiceTest.java (3处修改)"
+        - "ProjectControllerTest.java (1处修改)"
+    
+    - id: REQ-FS-3
+      epic: EPIC-FS
+      title: "动态EMF兼容性保证"
+      priority: P0
+      status: "完成"
+      description: "setAttributeIfExists优雅降级机制"
+      implementation_files:
+        - "PilotEMFService.java"
+        - "UniversalElementService.java"
+      test_coverage:
+        test_files:
+          - "FieldStandardizationTest.java"
+        test_methods: 6
+        coverage_details: "优雅降级和通用处理验证"
+  
+  # Phase1 Milestone 0需求（从phase1-milestone0-tracking.yaml）
+  phase1_requirements:
+    - id: REQ-F1-1
+      story: STORY-F1
+      name: "RequirementDefinition CRUD前端集成"
+      status: "完成"
+      implementation_files:
+        - "frontend/src/App.tsx"
+        - "frontend/src/components/layout/MainLayout.tsx"
+        - "frontend/src/components/dialogs/CreateRequirementDialog.tsx"
+        - "frontend/src/services/requirementService.ts"
+      test_coverage:
+        test_files:
+          - "RequirementCRUD.integration.test.tsx"
+          - "CreateRequirementDialog.test.tsx"
+        location: "frontend/src/__tests__/integration/"
+        test_points:
+          - "验证标准字段映射正确"
+          - "验证metadata字段处理"
+    
+    - id: REQ-F1-2
+      story: STORY-F1
+      name: "RequirementUsage CRUD前端集成"
+      status: "完成"
+      field_changes:
+        - "移除subject字段"
+        - "添加requirementDefinition必填验证"
+      implementation_files:
+        - "frontend/src/components/dialogs/CreateRequirementDialog.tsx"
+        - "frontend/src/services/requirementService.ts"
+      test_coverage:
+        test_files:
+          - "RequirementUsageFinal.test.tsx"
+        location: "frontend/src/__tests__/integration/"
+        completed_updates:
+          - "✅ 移除subject字段相关测试"
+          - "✅ 添加requirementDefinition必填验证"
+          - "✅ 更新字段映射测试"
+    
+    - id: REQ-F1-3
+      story: STORY-F1
+      name: "需求编辑和删除功能"
+      status: "完成"
+      implementation_files:
+        - "frontend/src/components/table/TableView.tsx"
+        - "frontend/src/components/dialogs/EditRequirementDialog.tsx"
+      test_coverage:
+        test_files:
+          - "RequirementEdit.test.tsx"
+        location: "frontend/src/__tests__/integration/"
+        status: "完成"
+    
+    - id: REQ-F1-4
+      story: STORY-F1
+      name: "错误处理和用户反馈"
+      status: "完成"
+      implementation_files:
+        - "frontend/src/utils/errorHandler.ts"
+        - "frontend/src/components/common/ErrorBoundary.tsx"
+      test_coverage:
+        test_files:
+          - "ErrorHandling.test.tsx"
+        location: "frontend/src/__tests__/unit/"
+        test_scenarios:
+          - "requirementDefinition缺失错误处理"
+          - "reqId重复错误处理"
+    
+    - id: REQ-F2-1
+      story: STORY-F2
+      name: "树视图数据加载修复"
+      status: "完成"
+      implementation_files:
+        - "frontend/src/components/tree/TreeView.tsx"
+      test_coverage:
+        test_files:
+          - "TreeView.data.test.tsx"
+        location: "frontend/src/components/tree/__tests__/"
+        notes: |
+          - ✅ 解决了Vitest 1.6.0的axios序列化问题
+          - ✅ 实现了完整的mock策略
+          - ✅ 所有12个测试用例全部通过
+    
+    - id: REQ-F2-2
+      story: STORY-F2
+      name: "表视图数据集成"
+      status: "完成"
+      implementation_files:
+        - "frontend/src/components/table/TableView.tsx"
+      test_coverage:
+        test_files:
+          - "TableView.data.test.tsx"
+        location: "frontend/src/components/table/__tests__/"
+      column_definitions:
+        - "✅ reqId: 需求ID"
+        - "✅ declaredName: 名称"
+        - "✅ documentation: 文档"
+        - "✅ requirementDefinition: 关联定义"
+    
+    - id: REQ-F2-3
+      story: STORY-F2
+      name: "图视图关系显示"
+      status: "完成"
+      implementation_files:
+        - "frontend/src/components/graph/GraphView.tsx"
+      test_coverage:
+        test_files:
+          - "GraphView.data.test.tsx"
+        location: "frontend/src/components/graph/__tests__/"
+    
+    - id: REQ-F2-4
+      story: STORY-F2
+      name: "三视图数据联动"
+      status: "完成"
+      implementation_files:
+        - "frontend/src/contexts/ModelContext.tsx"
+      test_coverage:
+        test_files:
+          - "ThreeViewSync.test.tsx"
+        location: "frontend/src/__tests__/integration/"
+  
+  # 关键修复追踪
+  critical_fixes:
+    - id: FIX-DELETE-PERSISTENCE
+      date: "2025-08-29"
+      issue: "删除操作持久化失败"
+      root_cause: "Resource缓存不一致"
+      implementation_files:
+        - "backend/src/main/java/com/sysml/mvp/service/UniversalElementService.java"
+      test_files:
+        - "backend/src/test/java/com/sysml/mvp/repository/FileModelRepositoryTest.java"
+      test_methods: 5
+      verification: "✅ 创建-删除-重启验证通过"
+    
+    - id: FIX-EMF-RESOURCE
+      date: "2025-08-29"
+      issue: "EMF Resource.getURI() null pointer"
+      root_cause: "JsonResource创建时未初始化URI"
+      implementation_files:
+        - "backend/src/main/java/com/sysml/mvp/repository/FileModelRepository.java"
+      test_files:
+        - "backend/src/test/java/com/sysml/mvp/repository/FileModelRepositoryTest.java"
+      test_methods: 5
+      solution: "确保URI设置和Resource添加到ResourceSet"
+
 # Phase1 Milestone 0完成记录
 phase1_completion:
   stories:

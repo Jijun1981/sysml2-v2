@@ -24,6 +24,7 @@ import {
   Select,
   DatePicker
 } from 'antd'
+import './TableView.css'
 import {
   EditOutlined,
   DeleteOutlined,
@@ -60,6 +61,10 @@ interface TableViewProps {
   pageable?: boolean
   /** 页面大小 */
   pageSize?: number
+  /** 只显示Usage（REQ-UI-2） */
+  usageOnly?: boolean
+  /** 显示工具栏（REQ-UI-3） */
+  showToolbar?: boolean
   /** 自定义列配置 */
   columns?: ColumnsType<TableRowData>
   /** 自定义样式类名 */
@@ -118,6 +123,8 @@ const TableView: React.FC<TableViewProps> = ({
   showRelation = false,
   pageable = true,
   pageSize = 50,
+  usageOnly = false,
+  showToolbar = false,
   columns: customColumns,
   className = '',
   size = 'middle',
@@ -141,23 +148,28 @@ const TableView: React.FC<TableViewProps> = ({
   const [currentSort, setCurrentSort] = useState<SortParam[]>([])
   const [currentFilters, setCurrentFilters] = useState<FilterParam[]>([])
   const [form] = Form.useForm()
-  const [definitionMap, setDefinitionMap] = useState<Map<string, string>>(new Map())
+  const [definitionMap, setDefinitionMap] = useState<Map<string, any>>(new Map())
 
   // 从ModelContext获取表格数据
   const tableData = useMemo(() => {
-    const data = getTableViewData()
+    let data = getTableViewData()
     
-    // 创建Definition映射
-    const defMap = new Map<string, string>()
+    // 创建Definition映射，存储完整的definition对象
+    const defMap = new Map<string, any>()
     data
       .filter((r: any) => r.eClass === 'RequirementDefinition')
       .forEach((def: any) => {
-        defMap.set(def.id, def.reqId || def.declaredName || def.id)
+        defMap.set(def.id, def)
       })
     setDefinitionMap(defMap)
     
+    // REQ-UI-2: 如果设置了usageOnly，只显示RequirementUsage
+    if (usageOnly) {
+      data = data.filter((r: any) => r.eClass === 'RequirementUsage')
+    }
+    
     return data
-  }, [getTableViewData])
+  }, [getTableViewData, usageOnly])
 
   // 加载数据
   const loadData = useCallback((params: QueryParams = {}) => {
@@ -290,68 +302,72 @@ const TableView: React.FC<TableViewProps> = ({
     }
   }, [deleteElement])
 
-  // 行选择
-  const rowSelection = useMemo(() => {
-    if (!selectable) return undefined
-
-    return {
-      selectedRowKeys: Array.from(selectedIds),
-      onChange: (selectedRowKeys: React.Key[]) => {
-        selectedRowKeys.forEach(key => {
-          selectElement(key as string, true)
-        })
-      },
-      onSelect: (record: TableRowData, selected: boolean) => {
-        selectElement(record.id, !selected)
-      },
-      onSelectAll: (selected: boolean, selectedRows: TableRowData[], changeRows: TableRowData[]) => {
-        changeRows.forEach(row => {
-          selectElement(row.id, !selected)
-        })
-      }
+  // 行点击选中（不使用复选框）
+  const handleRowClick = useCallback((record: TableRowData) => {
+    if (selectable) {
+      selectElement(record.id, false) // 单选模式
     }
-  }, [selectable, selectedIds, selectElement])
+  }, [selectable, selectElement])
 
-  // 默认列配置 - 使用标准化字段
+  // 行样式（高亮选中行）
+  const rowClassName = useCallback((record: TableRowData) => {
+    if (selectedIds.has(record.id)) {
+      return 'ant-table-row-selected'
+    }
+    return ''
+  }, [selectedIds])
+
+  // 默认列配置 - 使用实际存在的字段
   const defaultColumns: ColumnsType<TableRowData> = useMemo(() => {
     const cols: ColumnsType<TableRowData> = [
+      {
+        title: 'ID',
+        dataIndex: 'id',
+        key: 'id',
+        width: 80,
+        ellipsis: true,
+        render: (id: string) => (
+          <span style={{ fontSize: '12px', color: '#666' }}>
+            {id?.substring(0, 8)}
+          </span>
+        )
+      },
       {
         title: '类型',
         dataIndex: 'eClass',
         key: 'eClass',
         width: 100,
-        sorter: sortable,
-        filters: filterable ? [
-          { text: 'RequirementDefinition', value: 'RequirementDefinition' },
-          { text: 'RequirementUsage', value: 'RequirementUsage' }
-        ] : undefined,
-        filterIcon: <FilterOutlined />,
-        render: (eClass: string) => (
-          <Tag color={eClass === 'RequirementDefinition' ? 'blue' : 'green'}>
-            {eClass === 'RequirementDefinition' ? '定义' : '使用'}
-          </Tag>
-        )
+        render: (eClass: string) => {
+          if (usageOnly) {
+            return <Tag color="purple">使用</Tag>
+          }
+          return (
+            <Tag color={eClass === 'RequirementDefinition' ? 'blue' : 'purple'}>
+              {eClass === 'RequirementDefinition' ? '定义' : '使用'}
+            </Tag>
+          )
+        }
       },
       {
-        title: '需求ID',
-        dataIndex: 'reqId',
-        key: 'reqId',
-        width: 120,
+        title: '短名称',
+        dataIndex: 'declaredShortName',
+        key: 'declaredShortName',
+        width: 150,
         sorter: sortable,
-        render: (reqId?: string, record: any) => {
-          if (record.eClass === 'RequirementDefinition') {
-            return <strong>{reqId || '-'}</strong>
-          }
-          // Usage显示关联的Definition
-          if (record.requirementDefinition) {
-            const defName = definitionMap.get(record.requirementDefinition)
+        ellipsis: true,
+        render: (text: string, record: TableRowData) => {
+          if (editingRow && editingRow.key === record.id) {
             return (
-              <span style={{ color: '#1890ff' }}>
-                → {defName || record.requirementDefinition}
-              </span>
+              <Form.Item 
+                name="declaredShortName" 
+                rules={[{ required: false }]}
+                style={{ margin: 0 }}
+              >
+                <Input size="small" placeholder="短名称" />
+              </Form.Item>
             )
           }
-          return '-'
+          return text || '-'
         }
       },
       {
@@ -373,16 +389,32 @@ const TableView: React.FC<TableViewProps> = ({
               </Form.Item>
             )
           }
-          return <strong>{text || '-'}</strong>
+          return <strong>{text || record.id}</strong>
         }
       },
       {
-        title: '文档',
-        dataIndex: 'documentation',
-        key: 'documentation',
-        width: 300,
+        title: '文本描述',
+        dataIndex: 'text',
+        key: 'text',
         ellipsis: true,
-        render: (doc?: string) => doc || '-'
+        render: (text?: string, record: any) => {
+          if (editingRow && editingRow.key === record.id) {
+            return (
+              <Form.Item 
+                name="text" 
+                style={{ margin: 0 }}
+              >
+                <Input.TextArea size="small" rows={2} />
+              </Form.Item>
+            )
+          }
+          const desc = text || record.documentation || '-'
+          return (
+            <span style={{ fontSize: '13px' }}>
+              {desc.length > 100 ? `${desc.substring(0, 100)}...` : desc}
+            </span>
+          )
+        }
       },
       {
         title: '状态',
@@ -391,53 +423,44 @@ const TableView: React.FC<TableViewProps> = ({
         width: 100,
         sorter: sortable,
         filters: filterable ? [
-          { text: 'approved', value: 'approved' },
-          { text: 'draft', value: 'draft' },
-          { text: 'implemented', value: 'implemented' },
-          { text: 'verified', value: 'verified' },
-          { text: 'deprecated', value: 'deprecated' }
+          { text: '已批准', value: 'approved' },
+          { text: '草稿', value: 'draft' },
+          { text: '已实现', value: 'implemented' },
+          { text: '已验证', value: 'verified' },
+          { text: '已废弃', value: 'deprecated' }
         ] : undefined,
         filterIcon: <FilterOutlined />,
         render: (status: string) => {
           return status ? (
             <Tag color={getStatusColor(status)}>
-              {status}
+              {getStatusText(status)}
             </Tag>
-          ) : '-'
+          ) : <Tag>草稿</Tag>
         }
       },
       {
-        title: '优先级',
-        dataIndex: 'priority',
-        key: 'priority',
-        width: 100,
+        title: '创建时间',
+        dataIndex: 'createdAt',
+        key: 'createdAt',
+        width: 150,
         sorter: sortable,
-        render: (priority?: string) => {
-          const colorMap: Record<string, string> = {
-            'P0': 'red',
-            'P1': 'orange',
-            'P2': 'blue',
-            'P3': 'default'
-          }
-          return priority ? (
-            <Tag color={colorMap[priority] || 'default'}>
-              {priority}
-            </Tag>
-          ) : '-'
+        render: (createdAt?: string) => {
+          if (!createdAt) return '-'
+          const date = new Date(createdAt)
+          return date.toLocaleDateString('zh-CN') + ' ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
         }
       },
       {
-        title: '验证方法',
-        dataIndex: 'verificationMethod',
-        key: 'verificationMethod',
-        width: 120,
-        filters: filterable ? [
-          { text: 'test', value: 'test' },
-          { text: 'analysis', value: 'analysis' },
-          { text: 'inspection', value: 'inspection' },
-          { text: 'demonstration', value: 'demonstration' }
-        ] : undefined,
-        render: (method?: string) => method || '-'
+        title: '更新时间',
+        dataIndex: 'updatedAt',
+        key: 'updatedAt',
+        width: 150,
+        sorter: sortable,
+        render: (updatedAt?: string) => {
+          if (!updatedAt) return '-'
+          const date = new Date(updatedAt)
+          return date.toLocaleDateString('zh-CN') + ' ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+        }
       },
       {
         title: '操作',
@@ -501,94 +524,143 @@ const TableView: React.FC<TableViewProps> = ({
       }
     ]
 
-    // 如果showRelation为true，添加关联定义列
-    if (showRelation) {
-      cols.splice(2, 0, {
+    // 如果showRelation为true，添加关联定义列（仅对Usage有效）
+    if (showRelation && usageOnly) {
+      cols.splice(3, 0, {
         title: '关联定义',
         dataIndex: 'requirementDefinition',
         key: 'requirementDefinition',
         width: 150,
-        render: (defId?: string) => defId || '-'
+        ellipsis: true,
+        render: (defId?: string, record: any) => {
+          // 尝试从多个可能的位置获取requirementDefinition
+          const definitionId = defId || 
+                              record.requirementDefinition || 
+                              record.properties?.requirementDefinition || 
+                              record.of || 
+                              record.properties?.of
+          if (!definitionId) return '-'
+          
+          // 如果有definitionMap，显示定义名称
+          if (definitionMap && definitionMap.has(definitionId)) {
+            const def = definitionMap.get(definitionId)
+            return def?.declaredShortName || def?.declaredName || definitionId.substring(0, 8)
+          }
+          return definitionId.substring(0, 8)
+        }
       })
     }
 
     return cols
-  }, [editingRow, editable, sortable, filterable, showRelation, definitionMap, handleEdit, handleSave, handleCancel, handleDelete])
+  }, [editingRow, editable, sortable, filterable, showRelation, usageOnly, definitionMap, handleEdit, handleSave, handleCancel, handleDelete])
 
   // 最终列配置
   const finalColumns = customColumns || defaultColumns
 
   return (
-    <div className={`table-view-container ${className}`} style={{ padding: '16px' }}>
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
-        {/* 标题 */}
-        <Title level={4} style={{ margin: 0 }}>
-          需求表格视图
-        </Title>
-
-        {/* 工具栏 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {/* 搜索框 */}
-          {searchable && (
-            <Search
-              placeholder="搜索需求..."
-              allowClear
-              prefix={<SearchOutlined />}
-              style={{ width: 300 }}
-              onChange={(e) => setSearchValue(e.target.value)}
-              onSearch={handleSearch}
-            />
-          )}
-
-          {/* 统计信息 */}
-          <Space>
-            <span style={{ color: '#666' }}>
-              共 {pagination.totalElements} 条记录
-            </span>
-            {selectedIds.size > 0 && (
-              <span style={{ color: '#1890ff' }}>
-                已选择 {selectedIds.size} 项
-              </span>
-            )}
-          </Space>
+    <div className={`table-view-container ${className}`} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {/* 标题栏 */}
+        <div className="table-header">
+          {usageOnly ? '📋 需求条目列表' : '📊 需求表格视图'}
         </div>
 
-        {/* 表格 */}
-        <Form form={form} component={false}>
-          <Table<TableRowData>
-            columns={finalColumns}
-            dataSource={tableData}
-            rowKey="id"
-            size={size}
-            bordered={bordered}
-            loading={loading}
-            rowSelection={rowSelection}
-            pagination={pageable ? {
-              current: pagination.page + 1,
-              pageSize: pagination.size,
-              total: pagination.totalElements,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) => 
-                `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
-              pageSizeOptions: ['10', '20', '50', '100'],
-              size: 'default'
-            } : false}
-            onChange={handleTableChange}
-            scroll={{ x: 1000 }}
-            locale={{
-              emptyText: searchValue ? '未找到匹配数据' : '暂无数据'
-            }}
-          />
-        </Form>
+        {/* 工具栏 */}
+        {showToolbar && (
+          <div className="table-toolbar">
+            <Space>
+              <Button
+                type="primary"
+                size="small"
+                icon={<EditOutlined />}
+                disabled={selectedIds.size !== 1}
+                onClick={() => {
+                  if (selectedIds.size === 1) {
+                    const selectedId = Array.from(selectedIds)[0]
+                    handleEdit(tableData.find(r => r.id === selectedId)!)
+                  }
+                }}
+              >
+                编辑
+              </Button>
+              <Button
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                disabled={selectedIds.size === 0}
+                onClick={() => {
+                  if (selectedIds.size > 0) {
+                    const count = selectedIds.size
+                    const confirmMsg = count === 1 
+                      ? '确定要删除选中的需求吗？' 
+                      : `确定要删除选中的 ${count} 个需求吗？`
+                    if (window.confirm(confirmMsg)) {
+                      selectedIds.forEach(id => handleDelete(id))
+                    }
+                  }
+                }}
+              >
+                删除
+              </Button>
+              <Button
+                size="small"
+                onClick={() => loadData()}
+              >
+                刷新
+              </Button>
+              <div style={{ marginLeft: 'auto', marginRight: '16px' }}>
+                {selectedIds.size > 0 && (
+                  <span style={{ color: '#1890ff' }}>
+                    已选择 {selectedIds.size} 项
+                  </span>
+                )}
+                <span style={{ marginLeft: '16px', color: '#666' }}>
+                  共 {usageOnly ? tableData.length : pagination.totalElements} 条记录
+                </span>
+              </div>
+            </Space>
+          </div>
+        )}
 
+        {/* 表格容器 */}
+        <div style={{ flex: 1, overflow: 'hidden', padding: '0' }}>
+          <Form form={form} component={false}>
+            <Table<TableRowData>
+              columns={finalColumns}
+              dataSource={tableData}
+              rowKey="id"
+              size={size}
+              bordered={bordered}
+              loading={loading}
+              onRow={(record) => ({
+                onClick: () => handleRowClick(record),
+                style: { cursor: 'pointer' }
+              })}
+              rowClassName={rowClassName}
+              pagination={pageable ? {
+                current: pagination.page + 1,
+                pageSize: pagination.size,
+                total: pagination.totalElements,
+                showSizeChanger: true,
+                showQuickJumper: false,
+                showTotal: (total) => `共 ${total} 条`,
+                pageSizeOptions: ['10', '20', '30', '50'],
+                size: 'small'
+              } : false}
+              onChange={handleTableChange}
+              scroll={{ y: 'calc(100vh - 280px)' }}
+              locale={{
+                emptyText: '暂无数据'
+              }}
+            />
+          </Form>
+        </div>
+        
         {/* 错误状态 */}
         {error && (
           <div style={{ textAlign: 'center', padding: '20px', color: '#ff4d4f' }}>
             加载失败: {error.message}
           </div>
         )}
-      </Space>
     </div>
   )
 }

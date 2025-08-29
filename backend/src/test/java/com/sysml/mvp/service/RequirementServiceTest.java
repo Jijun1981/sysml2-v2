@@ -194,20 +194,30 @@ public class RequirementServiceTest {
      * RequirementUsage缺少必填字段requirementDefinition时应抛出异常
      */
     @Test
-    @DisplayName("REQ-C2-3: 必填字段验证")
-    public void testCreateRequirementUsage_ShouldThrowExceptionWhenRequirementDefinitionMissing() {
-        // Given: 缺少requirementDefinition字段的需求使用数据
+    @DisplayName("REQ-TDD-001-4: requirementDefinition字段可选")
+    public void testCreateRequirementUsage_ShouldAllowNullRequirementDefinition() {
+        // 【REQ-TDD-001-4】requirementDefinition字段是可选的
+        // Given: 没有requirementDefinition的RequirementUsage数据
         Map<String, Object> usageData = new HashMap<>();
-        usageData.put("declaredName", "缺少requirementDefinition的使用");
-        // 注意: requirementDefinition字段是RequirementUsage关联到RequirementDefinition的必填字段
+        usageData.put("elementId", "req-usage-no-def");
+        usageData.put("declaredName", "没有关联定义的使用");
         
-        // When & Then: 应该抛出IllegalArgumentException
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, 
-            () -> requirementService.createRequirementUsage(usageData));
+        ElementDTO expectedDto = new ElementDTO();
+        expectedDto.setElementId("req-usage-no-def");
+        expectedDto.setProperty("declaredName", "没有关联定义的使用");
         
-        assertTrue(exception.getMessage().contains("requirementDefinition is required"));
+        // When: 创建RequirementUsage时，不提供requirementDefinition
+        when(universalElementService.createElement("RequirementUsage", usageData))
+            .thenReturn(expectedDto);
         
-        verify(universalElementService, never()).createElement(anyString(), any());
+        ElementDTO result = requirementService.createRequirementUsage(usageData);
+        
+        // Then: 应该成功创建，不抛出异常
+        assertNotNull(result);
+        assertEquals("req-usage-no-def", result.getElementId());
+        assertEquals("没有关联定义的使用", result.getProperty("declaredName"));
+        
+        verify(universalElementService, times(1)).createElement("RequirementUsage", usageData);
     }
     
     /**

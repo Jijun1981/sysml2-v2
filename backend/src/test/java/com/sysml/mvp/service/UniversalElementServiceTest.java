@@ -49,6 +49,9 @@ public class UniversalElementServiceTest {
     private EMFModelRegistry emfModelRegistry;
     
     @Mock
+    private ReferenceResolverService referenceResolverService;
+    
+    @Mock
     private Resource mockResource;
     
     @Mock
@@ -63,7 +66,8 @@ public class UniversalElementServiceTest {
         universalElementService = new UniversalElementService(
             pilotEMFService, 
             fileModelRepository, 
-            emfModelRegistry
+            emfModelRegistry,
+            referenceResolverService
         );
     }
 

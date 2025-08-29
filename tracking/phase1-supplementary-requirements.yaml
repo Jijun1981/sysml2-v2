@@ -1,0 +1,564 @@
+# Phase 1 补充需求追踪矩阵
+# 版本: 1.1
+# 日期: 2025-08-29
+# 说明: 基于《需求建模平台Phase1追加需求.md》的实施状态分析 + 紧急UI改进需求
+# 基线: MVP v7.0 + Phase1 Milestone 0完成
+
+metadata:
+  document_source: "需求建模平台Phase1追加需求.md v5.0"
+  baseline_version: "MVP v7.0 + Phase1 M0"
+  analysis_date: "2025-08-29"
+  last_update: "2025-08-29T16:30:00Z"
+  total_requirements: 54  # 原47个 + 4个紧急UI改进 + 3个SysML字段对齐
+  implemented: 11
+  not_implemented: 43
+  implementation_rate: "20.4%"
+
+# SysML 2.0 标准字段对齐需求（P0-紧急）
+sysml_field_alignment:
+  priority: "P0-紧急"
+  estimated_effort: "1-2天"
+  description: "将数据层字段与SysML 2.0标准完全对齐，确保元模型正确性"
+  reference_document: "docs/requirements/SysML2.0标准字段对齐需求.md"
+  
+  requirements:
+    - id: REQ-FIELD-001
+      name: "RequirementUsage字段标准化"
+      status: "✅ 已实现"
+      priority: "P0"
+      description: "RequirementUsage必须使用标准的requirementDefinition字段关联RequirementDefinition"
+      acceptance_criteria:
+        - "数据生成脚本使用requirementDefinition字段，移除of字段"
+        - "后端ElementMapper正确处理requirementDefinition字段映射"
+        - "前端可以正确显示Usage → Definition的关联关系"
+        - "API测试验证字段名称正确性"
+      test_cases:
+        - name: "RequirementUsageFieldMapping.test.java"
+          type: "unit"
+          test_points:
+            - "requirementDefinition字段映射"
+            - "of字段兼容性处理"
+            - "字段验证逻辑"
+      implementation_notes:
+        - "修正generate-simple-data.js中的字段名"
+        - "确认ElementMapper.java字段映射正确性"
+    
+    - id: REQ-FIELD-002
+      name: "Dependency字段标准化"
+      status: "✅ 已实现"
+      priority: "P0"
+      description: "Dependency关系必须使用标准的client/supplier字段，而非fromId/toId"
+      acceptance_criteria:
+        - "TraceService创建Dependency时使用client/supplier字段"
+        - "PilotEMFService.setDependencyReferences()正确设置标准字段"
+        - "数据生成脚本使用标准字段名"
+        - "前端API调用适配新字段名"
+      test_cases:
+        - name: "DependencyFieldMapping.test.java"
+          type: "unit"
+          test_points:
+            - "client/supplier字段设置"
+            - "fromId/toId兼容性处理"
+            - "字段标准化验证"
+      implementation_notes:
+        - "更新TraceService使用标准字段"
+        - "完善PilotEMFService字段设置逻辑"
+    
+    - id: REQ-FIELD-003
+      name: "Dependency类型标准化"
+      status: "✅ 已实现"
+      priority: "P0"
+      description: "依赖关系类型必须通过具体EClass体现，而非type属性"
+      acceptance_criteria:
+        - "TraceService直接创建具体EClass（DeriveRequirement, Satisfy等）"
+        - "移除Dependency的type属性字段"
+        - "API层类型枚举映射到正确的EClass名称"
+        - "数据序列化使用具体的EClass类型"
+      test_cases:
+        - name: "DependencyTypeMapping.test.java"
+          type: "unit"
+          test_points:
+            - "类型到EClass映射"
+            - "具体EClass创建"
+            - "type属性移除验证"
+      implementation_notes:
+        - "确认TraceService的TYPE_TO_ECLASS_MAPPING正确性"
+        - "修正数据生成脚本使用具体EClass"
+
+  implementation_plan:
+    immediate:
+      - "实现REQ-FIELD-002: Dependency字段标准化"
+      - "编写DependencyFieldMapping.test.java测试"
+      - "更新TraceService使用client/supplier字段"
+    
+    validation:
+      - "运行所有字段对齐相关测试"
+      - "验证生成数据符合SysML 2.0标准"
+      - "确认前后端字段映射正确性"
+
+# 紧急UI改进需求（优先级最高）
+urgent_ui_improvements:
+  priority: "P0-紧急"
+  estimated_effort: "2-3天"
+  description: "用户反馈的关键UI问题，影响基本使用"
+  
+  requirements:
+    - id: REQ-UI-1
+      name: "表格分页功能"
+      status: "待实现"
+      priority: "P0"
+      description: "表格必须支持分页，否则看不到后面的数据"
+      acceptance_criteria:
+        - "表格底部显示分页组件"
+        - "每页默认显示20条数据"
+        - "支持跳转到指定页"
+        - "显示总条数和当前页信息"
+      test_cases:
+        - name: "TablePagination.test.tsx"
+          type: "unit"
+          test_points:
+            - "分页组件渲染"
+            - "页码切换功能"
+            - "每页条数设置"
+            - "总条数显示"
+      implementation_notes:
+        - "使用Ant Design的Pagination组件"
+        - "在TableView.tsx中添加分页逻辑"
+    
+    - id: REQ-UI-2
+      name: "分离Definition和Usage显示"
+      status: "待实现"
+      priority: "P0"
+      description: "表格只显示RequirementUsage（真正的需求条目），不显示Definition"
+      acceptance_criteria:
+        - "表格过滤掉eClass为RequirementDefinition的数据"
+        - "只显示RequirementUsage条目"
+        - "显示每个Usage关联的Definition名称"
+      test_cases:
+        - name: "TableUsageFilter.test.tsx"
+          type: "unit"
+          test_points:
+            - "过滤Definition数据"
+            - "只显示Usage数据"
+            - "显示关联Definition"
+      implementation_notes:
+        - "在TableView.tsx中添加eClass过滤"
+        - "添加requirementDefinition字段显示"
+    
+    - id: REQ-UI-3
+      name: "表格顶部编辑按钮"
+      status: "待实现"
+      priority: "P0"
+      description: "选中需求后，在表格上方显示编辑按钮"
+      acceptance_criteria:
+        - "表格上方工具栏包含编辑按钮"
+        - "未选中时按钮禁用"
+        - "选中单个需求时启用编辑按钮"
+        - "点击编辑按钮打开EditRequirementDialog"
+      test_cases:
+        - name: "TableToolbar.test.tsx"
+          type: "unit"
+          test_points:
+            - "工具栏渲染"
+            - "按钮状态管理"
+            - "编辑对话框触发"
+      implementation_notes:
+        - "创建TableToolbar组件"
+        - "集成到TableView.tsx"
+        - "使用selectedRowKeys管理选中状态"
+    
+    - id: REQ-UI-4
+      name: "双树界面布局"
+      status: "待实现"
+      priority: "P0"
+      description: "左侧树分为上下两部分：上部显示Definition树，下部显示Usage树"
+      acceptance_criteria:
+        - "树视图垂直分割为两部分"
+        - "上部显示所有RequirementDefinition"
+        - "下部显示所有RequirementUsage"
+        - "支持拖动调节分割线位置"
+        - "每部分都有独立的搜索功能"
+      test_cases:
+        - name: "DualTreeView.test.tsx"
+          type: "unit"
+          test_points:
+            - "双树布局渲染"
+            - "Definition数据过滤"
+            - "Usage数据过滤"
+            - "分割线调节"
+            - "独立搜索功能"
+      implementation_notes:
+        - "使用react-split-pane或类似组件"
+        - "重构TreeView.tsx支持双树"
+        - "分别加载Definition和Usage数据"
+
+  implementation_plan:
+    day_1:
+      - "实现表格分页功能（REQ-UI-1）"
+      - "编写TablePagination.test.tsx测试"
+      - "实现Definition/Usage分离（REQ-UI-2）"
+      - "编写TableUsageFilter.test.tsx测试"
+    
+    day_2:
+      - "实现表格顶部编辑按钮（REQ-UI-3）"
+      - "编写TableToolbar.test.tsx测试"
+      - "开始双树界面布局（REQ-UI-4）"
+    
+    day_3:
+      - "完成双树界面布局（REQ-UI-4）"
+      - "编写DualTreeView.test.tsx测试"
+      - "集成测试和bug修复"
+
+# 已实现功能清单
+implemented_requirements:
+  # EPIC F - MVP基础功能完善（已完成）
+  epic_f:
+    status: "✅ 100%完成"
+    requirements:
+      - id: REQ-F1-1
+        name: "RequirementDefinition CRUD前端集成"
+        status: "✅ 已实现"
+        evidence:
+          - "CreateRequirementDialog.tsx已集成到ModelViewerClean.tsx"
+          - "RequirementCRUD.integration.test.tsx测试通过"
+      
+      - id: REQ-F1-2
+        name: "RequirementUsage CRUD前端集成"
+        status: "✅ 已实现"
+        evidence:
+          - "requirementDefinition字段关联已实现"
+          - "RequirementUsageFinal.test.tsx测试通过"
+      
+      - id: REQ-F1-3
+        name: "需求编辑和删除功能"
+        status: "✅ 已实现"
+        evidence:
+          - "TableView.tsx包含编辑删除按钮"
+          - "EditRequirementDialog.tsx已实现"
+          - "删除持久化问题已修复(2025-08-29)"
+      
+      - id: REQ-F1-4
+        name: "错误处理和用户反馈"
+        status: "✅ 已实现"
+        evidence:
+          - "errorHandler.ts已创建"
+          - "ErrorBoundary.tsx已实现"
+          - "ErrorHandling.test.tsx测试通过"
+      
+      - id: REQ-F2-1
+        name: "树视图数据加载修复"
+        status: "✅ 已实现"
+        evidence:
+          - "TreeView.tsx使用requirementService加载真实数据"
+          - "TreeView.data.test.tsx所有12个测试通过"
+      
+      - id: REQ-F2-2
+        name: "表视图数据集成"
+        status: "✅ 已实现"
+        evidence:
+          - "TableView.tsx显示标准化字段"
+          - "TableView.data.test.tsx测试通过"
+      
+      - id: REQ-F2-3
+        name: "图视图关系显示"
+        status: "✅ 已实现"
+        evidence:
+          - "GraphView.tsx显示需求节点和追溯关系"
+          - "GraphView.data.test.tsx测试通过"
+
+  # 部分实现的功能
+  partially_implemented:
+    - id: REQ-J3-1
+      name: "需求表格列定义"
+      status: "⚠️ 部分实现"
+      implemented:
+        - "显示reqId、declaredName、documentation等核心字段"
+        - "支持基本的排序和筛选"
+      not_implemented:
+        - "verificationMethod字段显示"
+        - "createdAt、updatedAt时间戳显示"
+        - "列的显示/隐藏配置"
+    
+    - id: REQ-J2-1
+      name: "SysML标准节点样式"
+      status: "⚠️ 部分实现"
+      implemented:
+        - "Definition和Usage节点区分（蓝色vs紫色边框）"
+      not_implemented:
+        - "«requirement»构造型标注"
+        - "分段显示（header/text/constraints）"
+        - "虚线vs实线边框区分"
+    
+    - id: REQ-I1-3
+      name: "循环依赖检测"
+      status: "⚠️ 部分实现"
+      implemented:
+        - "ValidationService.java包含基础验证"
+      not_implemented:
+        - "derive/refine关系的深度优先搜索算法"
+        - "返回具体循环路径"
+
+# 未实现功能清单
+not_implemented_requirements:
+  # EPIC G - 技术规格书项目管理（完全未实现）
+  epic_g:
+    status: "❌ 0%实现"
+    priority: "P0-关键"
+    estimated_effort: "2周"
+    requirements:
+      - id: REQ-G1-1
+        name: "创建技术规格书"
+        description: "POST /api/v1/tech-specs接口"
+        impact: "核心功能，影响项目级管理"
+      
+      - id: REQ-G1-2
+        name: "查询技术规格书"
+        description: "GET /api/v1/tech-specs接口"
+      
+      - id: REQ-G1-3
+        name: "更新技术规格书"
+        description: "PATCH /api/v1/tech-specs/{id}接口"
+      
+      - id: REQ-G1-4
+        name: "删除技术规格书"
+        description: "DELETE /api/v1/tech-specs/{id}接口"
+      
+      - id: REQ-G2-1
+        name: "技术规格书需求关联"
+        description: "需求必须指定techSpecId"
+      
+      - id: REQ-G2-2
+        name: "技术规格书内容查询"
+        description: "查询规格书包含的需求和关系"
+      
+      - id: REQ-G2-3
+        name: "技术规格书完整性校验"
+        description: "跨规格书引用检测"
+
+  # EPIC H - 需求库和模板管理（完全未实现）
+  epic_h:
+    status: "❌ 0%实现"
+    priority: "P0-关键"
+    estimated_effort: "2周"
+    requirements:
+      - id: REQ-H1-1
+        name: "需求定义库查询"
+        description: "GET /api/v1/requirement-definitions接口"
+        notes: "需要分类、搜索、筛选功能"
+      
+      - id: REQ-H1-2
+        name: "需求定义批量导入"
+        description: "支持JSON/CSV批量导入"
+      
+      - id: REQ-H1-3
+        name: "需求定义使用统计"
+        description: "统计定义被引用次数"
+      
+      - id: REQ-H2-1
+        name: "需求包定义"
+        description: "RequirementPackage数据模型"
+      
+      - id: REQ-H2-2
+        name: "需求包CRUD操作"
+        description: "需求包管理API"
+      
+      - id: REQ-H2-3
+        name: "需求包导入到技术规格书"
+        description: "批量导入包内定义"
+
+  # EPIC I - 基于关系的需求层级管理（大部分未实现）
+  epic_i:
+    status: "❌ 10%实现"
+    priority: "P0-关键"
+    estimated_effort: "3周"
+    requirements:
+      - id: REQ-I1-1
+        name: "关系驱动的树构建算法"
+        status: "❌ 未实现"
+        description: "基于derive/refine关系构建树形结构"
+        critical: true
+      
+      - id: REQ-I1-2
+        name: "孤立需求识别"
+        status: "❌ 未实现"
+        description: "识别没有关系的孤立需求"
+      
+      - id: REQ-I2-1
+        name: "Definition到Usage的拖拽创建"
+        status: "❌ 未实现"
+        description: "拖拽创建RequirementUsage"
+      
+      - id: REQ-I2-2
+        name: "需求间关系拖拽创建"
+        status: "❌ 未实现"
+        description: "拖拽创建derive/refine/trace/satisfy关系"
+      
+      - id: REQ-I2-3
+        name: "需求包整体拖拽导入"
+        status: "❌ 未实现"
+        description: "拖拽导入需求包"
+
+  # EPIC J - 多视图建模界面（大部分未实现）
+  epic_j:
+    status: "❌ 20%实现"
+    priority: "P0-关键"
+    estimated_effort: "3周"
+    requirements:
+      - id: REQ-J1-1
+        name: "双树界面布局"
+        status: "❌ 未实现"
+        description: "上下分屏的双树界面"
+        critical: true
+      
+      - id: REQ-J1-2
+        name: "需求库分类展示"
+        status: "❌ 未实现"
+        description: "下部树按分类展示需求定义"
+      
+      - id: REQ-J1-3
+        name: "跨树拖拽操作"
+        status: "❌ 未实现"
+        description: "支持跨树拖拽创建"
+      
+      - id: REQ-J2-2
+        name: "关系连线标准样式"
+        status: "❌ 未实现"
+        description: "不同关系类型使用不同样式"
+      
+      - id: REQ-J2-3
+        name: "图布局算法"
+        status: "❌ 未实现"
+        description: "分层布局算法自动排列节点"
+      
+      - id: REQ-J3-2
+        name: "行内编辑功能"
+        status: "❌ 未实现"
+        description: "双击单元格进入编辑模式"
+      
+      - id: REQ-J3-3
+        name: "批量操作"
+        status: "❌ 未实现"
+        description: "多选行批量状态更新、删除"
+
+  # EPIC K - 数据状态管理和同步（完全未实现）
+  epic_k:
+    status: "❌ 0%实现"
+    priority: "P0-关键"
+    estimated_effort: "2周"
+    requirements:
+      - id: REQ-K1-1
+        name: "中央数据Store设计"
+        status: "❌ 未实现"
+        description: "RequirementDataStore统一管理"
+        critical: true
+      
+      - id: REQ-K1-2
+        name: "乐观更新机制"
+        status: "❌ 未实现"
+        description: "UI立即更新，后台异步提交"
+      
+      - id: REQ-K1-3
+        name: "变更事件系统"
+        status: "❌ 未实现"
+        description: "类型化事件系统"
+      
+      - id: REQ-K2-1
+        name: "选择状态同步"
+        status: "❌ 未实现"
+        description: "多视图选择状态同步"
+      
+      - id: REQ-K2-2
+        name: "结构变更同步"
+        status: "❌ 未实现"
+        description: "创建/删除时视图同步"
+      
+      - id: REQ-K2-3
+        name: "编辑状态管理"
+        status: "❌ 未实现"
+        description: "防止并发编辑冲突"
+
+# 实施建议
+implementation_recommendations:
+  immediate_priorities:
+    - name: "技术规格书管理（EPIC G）"
+      reason: "项目级管理是其他功能的基础"
+      estimated_effort: "2周"
+      dependencies: []
+    
+    - name: "中央数据Store（REQ-K1-1）"
+      reason: "SSOT架构是多视图同步的前提"
+      estimated_effort: "1周"
+      dependencies: []
+
+  short_term_goals:
+    - name: "双树界面布局（REQ-J1-1）"
+      reason: "核心UI架构，影响用户体验"
+      estimated_effort: "1周"
+      dependencies: ["技术规格书管理"]
+    
+    - name: "关系驱动的树构建（REQ-I1-1）"
+      reason: "SysML 2.0标准的核心要求"
+      estimated_effort: "1周"
+      dependencies: ["中央数据Store"]
+
+  medium_term_goals:
+    - name: "需求库和包管理（EPIC H）"
+      reason: "支持可复用性和批量操作"
+      estimated_effort: "2周"
+      dependencies: ["技术规格书管理"]
+    
+    - name: "拖拽建模交互（Story I2）"
+      reason: "提升建模效率"
+      estimated_effort: "2周"
+      dependencies: ["双树界面布局", "关系驱动的树构建"]
+
+# 风险评估
+risk_assessment:
+  high_risks:
+    - risk: "缺少技术规格书管理会导致无法进行项目级需求管理"
+      impact: "高"
+      mitigation: "立即开始EPIC G的开发"
+    
+    - risk: "没有SSOT架构会导致数据不一致"
+      impact: "高"
+      mitigation: "优先实现中央数据Store"
+    
+    - risk: "缺少关系驱动的树会偏离SysML 2.0标准"
+      impact: "高"
+      mitigation: "尽快实现REQ-I1-1"
+
+  medium_risks:
+    - risk: "缺少批量操作影响用户效率"
+      impact: "中"
+      mitigation: "在Phase 1后期补充"
+    
+    - risk: "拖拽功能缺失影响用户体验"
+      impact: "中"
+      mitigation: "可以先用按钮操作替代"
+
+# 总结
+summary:
+  current_status: |
+    Phase 1追加需求文档定义了47个需求，目前：
+    - 完全实现：7个（14.9%）
+    - 部分实现：3个（6.4%）
+    - 未实现：37个（78.7%）
+    
+    主要完成了EPIC F（MVP基础功能完善），其他EPIC基本未开始。
+  
+  critical_gaps:
+    - "技术规格书项目管理体系完全缺失"
+    - "需求库和模板管理功能未实现"
+    - "关系驱动的层级结构未实现"
+    - "双树建模界面未实现"
+    - "中央数据Store和SSOT架构缺失"
+  
+  next_steps:
+    priority_1: "实现技术规格书管理（EPIC G）"
+    priority_2: "构建中央数据Store（REQ-K1-1）"
+    priority_3: "实现双树界面布局（REQ-J1-1）"
+    priority_4: "实现关系驱动的树构建（REQ-I1-1）"
+  
+  estimated_completion:
+    with_current_pace: "需要额外10-12周完成所有Phase 1需求"
+    recommended_mvp: "建议先完成P0关键功能（4-5周）"
