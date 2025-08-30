@@ -135,15 +135,27 @@ public class UniversalElementService {
             return null;
         }
         
-        // 只更新指定的属性
-        for (Map.Entry<String, Object> entry : updates.entrySet()) {
-            pilotEMFService.setAttributeIfExists(eObject, entry.getKey(), entry.getValue());
+        // 【REQ-TDD-001-1】为PilotEMFService设置对象查找器，支持EMF引用字段
+        Resource resource = eObject.eResource();
+        if (resource != null) {
+            pilotEMFService.setObjectFinder(id -> 
+                referenceResolverService.findObjectInResource(resource, id));
         }
         
-        // 保存
+        try {
+            // 使用mergeAttributes来正确处理特殊字段（documentation, requirementDefinition等）
+            pilotEMFService.mergeAttributes(eObject, updates);
+        } finally {
+            // 清理对象查找器
+            pilotEMFService.setObjectFinder(null);
+        }
+        
+        // 保存 - 使用EObject所属的Resource，不要重新加载
         String projectId = "default";
-        Resource resource = fileModelRepository.loadProject(projectId);
-        fileModelRepository.saveProject(projectId, resource);
+        if (resource != null) {
+            fileModelRepository.saveProject(projectId, resource);
+            log.info("PATCH更新并保存元素: {} 属性: {}", elementId, updates.keySet());
+        }
         
         return toDTO(eObject);
     }

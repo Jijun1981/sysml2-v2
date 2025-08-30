@@ -44,7 +44,7 @@ cd .. && ./quick-test.sh
 
 # 特别验证删除持久化（这最容易被破坏）
 TEST_ID="API-$(date +%s)"
-curl -X POST "http://localhost:8080/api/v1/requirements" -H "Content-Type: application/json" -d "{\"elementId\":\"$TEST_ID\",\"reqId\":\"$TEST_ID\",\"name\":\"API测试\"}"
+curl -X POST "http://localhost:8080/api/v1/requirements" -H "Content-Type: application/json" -d "{\"elementId\":\"$TEST_ID\",\"reqId\":\"$TEST_ID\",\"declaredShortName\":\"API测试\",\"declaredName\":\"API测试描述\"}"
 curl -X DELETE "http://localhost:8080/api/v1/requirements/$TEST_ID"
 # 重启后端，确认数据真的删除了
 ```
@@ -76,7 +76,7 @@ TEST_ID="CRITICAL-$(date +%s)"
 # 1. 创建测试数据
 curl -X POST "http://localhost:8080/api/v1/requirements" \
   -H "Content-Type: application/json" \
-  -d "{\"elementId\":\"$TEST_ID\",\"reqId\":\"$TEST_ID\",\"name\":\"删除测试\"}"
+  -d "{\"elementId\":\"$TEST_ID\",\"reqId\":\"$TEST_ID\",\"declaredShortName\":\"删除测试\",\"declaredName\":\"删除测试的描述\"}"
 
 # 2. 确认创建成功
 curl http://localhost:8080/api/v1/requirements | grep "$TEST_ID" && echo "✅ 创建成功"
@@ -107,12 +107,12 @@ curl http://localhost:8080/api/v1/requirements | grep "$TEST_ID" || echo "🎉 �
 # RequirementDefinition CRUD
 curl -X POST http://localhost:8080/api/v1/requirements \
   -H "Content-Type: application/json" \
-  -d '{"elementId":"TEST-DEF","reqId":"TEST-DEF","declaredName":"测试定义"}'
+  -d '{"elementId":"TEST-DEF","reqId":"TEST-DEF","declaredShortName":"测试定义","declaredName":"这是测试定义的详细描述"}'
 
 # RequirementUsage与引用（新功能！）
 curl -X POST http://localhost:8080/api/v1/requirements/usages \
   -H "Content-Type: application/json" \
-  -d '{"elementId":"TEST-USE","declaredName":"测试使用","requirementDefinition":"TEST-DEF"}'
+  -d '{"elementId":"TEST-USE","declaredShortName":"测试使用","declaredName":"这是测试使用的详细描述","requirementDefinition":"TEST-DEF"}'
 
 # 验证引用关系
 curl http://localhost:8080/api/v1/requirements/usages | grep "requirementDefinition"
@@ -120,12 +120,12 @@ curl http://localhost:8080/api/v1/requirements/usages | grep "requirementDefinit
 # 测试空引用（REQ-TDD-001-4）
 curl -X POST http://localhost:8080/api/v1/requirements/usages \
   -H "Content-Type: application/json" \
-  -d '{"elementId":"TEST-NULL","declaredName":"无引用"}'
+  -d '{"elementId":"TEST-NULL","declaredShortName":"无引用","declaredName":"这是一个无引用的需求使用"}'
 
 # 测试无效引用（应该报错）
 curl -X POST http://localhost:8080/api/v1/requirements/usages \
   -H "Content-Type: application/json" \
-  -d '{"elementId":"TEST-ERR","declaredName":"错误引用","requirementDefinition":"NOT-EXIST"}'
+  -d '{"elementId":"TEST-ERR","declaredShortName":"错误引用","declaredName":"这是一个错误引用的测试","requirementDefinition":"NOT-EXIST"}'
 ```
 
 ### 2. 追溯关系管理
@@ -311,7 +311,7 @@ tail -f backend/sysml-mvp-backend.log
 ```bash
 # 创建带引用的Usage
 curl -X POST http://localhost:8080/api/v1/requirements/usages \
-  -d '{"elementId":"REF-TEST","declaredName":"引用测试","requirementDefinition":"DEF-PERF"}'
+  -d '{"elementId":"REF-TEST","declaredShortName":"引用测试","declaredName":"这是一个带引用的测试用例","requirementDefinition":"DEF-PERF"}'
 # 重启服务
 # 验证引用还在
 curl http://localhost:8080/api/v1/requirements/usages | grep "REF-TEST" | grep "DEF-PERF"

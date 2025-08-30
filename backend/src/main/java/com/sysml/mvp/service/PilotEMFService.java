@@ -113,15 +113,17 @@ public class PilotEMFService {
         setAttributeIfExists(reqDef, "elementId", id);
         
         // 映射API字段到Pilot字段
-        // reqId → declaredShortName
+        // REQ-TEXT-SIMPLE-001-1: 使用简化方案
+        // reqId → declaredShortName (简短名称)
         setAttributeIfExists(reqDef, "declaredShortName", reqId);
+        setAttributeIfExists(reqDef, "reqId", reqId);  // 同时设置reqId字段
         
-        // name → declaredName
-        setAttributeIfExists(reqDef, "declaredName", name);
-        
-        // text → documentation (这可能需要创建Documentation对象)
-        // 暂时尝试直接设置，如果字段结构复杂再处理
-        setDocumentation(reqDef, text);
+        // name/text → declaredName (描述文本)
+        if (text != null && !text.isEmpty()) {
+            setAttributeIfExists(reqDef, "declaredName", text);
+        } else if (name != null && !name.isEmpty()) {
+            setAttributeIfExists(reqDef, "declaredName", name);
+        }
         
         // 设置时间戳
         Date now = Date.from(Instant.now());
@@ -156,8 +158,11 @@ public class PilotEMFService {
         setAttributeIfExists(reqUsage, "elementId", id);
         
         // 设置基本属性
-        setAttributeIfExists(reqUsage, "declaredName", name);
-        setDocumentation(reqUsage, text);
+        // REQ-TEXT-SIMPLE-001-1: 使用简化方案
+        setAttributeIfExists(reqUsage, "declaredShortName", name);  // name作为简短名称
+        if (text != null && !text.isEmpty()) {
+            setAttributeIfExists(reqUsage, "declaredName", text);  // text作为描述
+        }
         
         // 设置Usage特有的status字段（如果存在）
         setAttributeIfExists(reqUsage, "status", status);
@@ -244,15 +249,28 @@ public class PilotEMFService {
     
     /**
      * 设置Documentation字段
-     * Pilot中documentation可能是复杂结构
+     * REQ-TEXT-SIMPLE-001-3: 不再使用Documentation对象，改用declaredName
+     * @deprecated 使用declaredName字段替代
      */
+    @Deprecated
     private void setDocumentation(EObject eObject, String text) {
+        log.debug("setDocumentation: 开始处理文档字段，目标类型: {}, 文本: {}", eObject.eClass().getName(), text);
+        
+        // 检查text字段类型
+        EClass eClass = eObject.eClass();
+        EStructuralFeature textFeature = eClass.getEStructuralFeature("text");
+        if (textFeature != null) {
+            log.debug("发现text字段: 类型={}, 多值={}, EClass={}", 
+                textFeature.getEType().getName(), 
+                textFeature.isMany(), 
+                textFeature.getEType().getInstanceClassName());
+        }
+        
         // 首先尝试直接设置body或text字段
         if (!setAttributeIfExists(eObject, "body", text) && 
             !setAttributeIfExists(eObject, "text", text)) {
             
             // 如果没有直接字段，查找documentation相关字段
-            EClass eClass = eObject.eClass();
             EStructuralFeature docFeature = eClass.getEStructuralFeature("documentation");
             
             if (docFeature instanceof EReference) {
@@ -364,8 +382,24 @@ public class PilotEMFService {
         
         if (feature != null && feature instanceof EAttribute) {
             try {
-                eObject.eSet(feature, value);
-                log.trace("设置属性 {}.{} = {}", eClass.getName(), attributeName, value);
+                // 处理多值字段
+                if (feature.isMany()) {
+                    @SuppressWarnings("unchecked")
+                    List<Object> list = (List<Object>) eObject.eGet(feature);
+                    list.clear(); // 清除现有值
+                    
+                    if (value instanceof String) {
+                        list.add(value); // 将字符串添加到列表
+                        log.debug("设置多值属性 {}.{} = [{}]", eClass.getName(), attributeName, value);
+                    } else if (value instanceof List) {
+                        list.addAll((List<?>) value);
+                        log.debug("设置多值属性 {}.{} = {}", eClass.getName(), attributeName, value);
+                    }
+                } else {
+                    // 单值字段直接设置
+                    eObject.eSet(feature, value);
+                    log.trace("设置属性 {}.{} = {}", eClass.getName(), attributeName, value);
+                }
                 return true;
             } catch (Exception e) {
                 log.debug("无法设置属性 {}.{}: {}", eClass.getName(), attributeName, e.getMessage());
@@ -376,8 +410,24 @@ public class PilotEMFService {
         for (EStructuralFeature inheritedFeature : eClass.getEAllStructuralFeatures()) {
             if (attributeName.equals(inheritedFeature.getName()) && inheritedFeature instanceof EAttribute) {
                 try {
-                    eObject.eSet(inheritedFeature, value);
-                    log.trace("设置继承属性 {}.{} = {}", eClass.getName(), attributeName, value);
+                    // 处理多值字段
+                    if (inheritedFeature.isMany()) {
+                        @SuppressWarnings("unchecked")
+                        List<Object> list = (List<Object>) eObject.eGet(inheritedFeature);
+                        list.clear(); // 清除现有值
+                        
+                        if (value instanceof String) {
+                            list.add(value); // 将字符串添加到列表
+                            log.debug("设置继承多值属性 {}.{} = [{}]", eClass.getName(), attributeName, value);
+                        } else if (value instanceof List) {
+                            list.addAll((List<?>) value);
+                            log.debug("设置继承多值属性 {}.{} = {}", eClass.getName(), attributeName, value);
+                        }
+                    } else {
+                        // 单值字段直接设置
+                        eObject.eSet(inheritedFeature, value);
+                        log.trace("设置继承属性 {}.{} = {}", eClass.getName(), attributeName, value);
+                    }
                     return true;
                 } catch (Exception e) {
                     log.debug("无法设置继承属性 {}.{}: {}", eClass.getName(), attributeName, e.getMessage());
@@ -546,9 +596,9 @@ public class PilotEMFService {
             log.debug("处理属性: {} = {} (类型: {})", attrName, value, 
                 value != null ? value.getClass().getSimpleName() : "null");
             
-            // 特殊处理documentation字段
+            // REQ-TEXT-SIMPLE-001-3: documentation映射到declaredName
             if ("documentation".equals(attrName) && value instanceof String) {
-                setDocumentation(element, (String) value);
+                setAttributeIfExists(element, "declaredName", (String) value);
             } else if ("requirementDefinition".equals(attrName) && value instanceof String) {
                 // 【REQ-TDD-001-1】特殊处理requirementDefinition EMF引用字段
                 log.info("检测到requirementDefinition字段，开始设置EMF引用: {}", value);
@@ -614,9 +664,27 @@ public class PilotEMFService {
                 continue;
             }
             
-            // 特殊处理documentation字段
+            // REQ-TEXT-SIMPLE-001-3: documentation映射到declaredName
             if ("documentation".equals(attributeName) && value instanceof String) {
-                setDocumentation(eObject, (String) value);
+                setAttributeIfExists(eObject, "declaredName", (String) value);
+                continue;
+            }
+            
+            // 【REQ-TDD-001-1】特殊处理requirementDefinition EMF引用字段
+            if ("requirementDefinition".equals(attributeName) && value instanceof String) {
+                log.info("检测到requirementDefinition字段，开始设置EMF引用: {}", value);
+                log.info("当前ObjectFinder是否设置: {}", objectFinder != null);
+                boolean refSet = setReferenceIfExists(eObject, attributeName, (String) value);
+                if (!refSet) {
+                    // 如果无法设置为EMF引用，这是一个错误（应该严格按EMF标准）
+                    log.error("无法为RequirementUsage设置requirementDefinition引用: {}", value);
+                    throw new IllegalArgumentException("引用目标对象未找到: " + value);
+                }
+                // 验证引用是否真的设置成功
+                EStructuralFeature refFeature = eObject.eClass().getEStructuralFeature("requirementDefinition");
+                Object refValue = refFeature != null ? eObject.eGet(refFeature) : null;
+                log.info("成功设置requirementDefinition引用: {} -> {} (类型: {})", 
+                    value, refValue, refValue != null ? refValue.getClass().getName() : "null");
                 continue;
             }
             

@@ -157,14 +157,20 @@ public class AdvancedQueryController {
             @PathVariable String elementId,
             @RequestBody Map<String, Object> updates,
             @RequestParam(defaultValue = "default") String projectId) {
+        log.info("=== 收到前端PATCH请求 ===");
+        log.info("elementId: {}", elementId);
+        log.info("updates: {}", updates);
+        log.info("projectId: {}", projectId);
         try {
             ElementDTO updated = universalElementService.patchElement(elementId, updates);
+            log.info("更新成功，返回: {}", updated);
             if (updated != null) {
                 return ResponseEntity.ok(updated);
             } else {
                 return ResponseEntity.notFound().build();
             }
         } catch (Exception e) {
+            log.error("更新失败: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().body("Failed to update element: " + e.getMessage());
         }
     }

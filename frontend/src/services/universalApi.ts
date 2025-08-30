@@ -127,7 +127,15 @@ export class UniversalApiClient {
    * PATCH /api/v1/elements/{id} {attributes}
    */
   async updateElement(id: string, attributes: Record<string, any>): Promise<ElementData> {
+    console.log('=== universalApi.updateElement 开始 ===')
+    console.log('ID:', id)
+    console.log('attributes:', attributes)
+    console.log('projectId:', this.projectId)
+    console.log('URL:', `/elements/${id}?projectId=${this.projectId}`)
+    
     const { data } = await this.client.patch(`/elements/${id}?projectId=${this.projectId}`, attributes)
+    console.log('=== universalApi.updateElement 响应 ===')
+    console.log('response data:', data)
     return data  // 后端直接返回元素对象
   }
 

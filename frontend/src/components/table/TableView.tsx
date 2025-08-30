@@ -35,6 +35,7 @@ import {
 } from '../../utils/icons'
 import { useModelContext } from '../../contexts/ModelContext'
 import { requirementService } from '../../services/requirementService'
+import { EditDialog } from '../EditDialog'
 import type { TableRowData, QueryParams, SortParam, FilterParam } from '../../types/models'
 import type { ColumnsType, TableProps } from 'antd/es/table'
 import type { SorterResult, TableCurrentDataSource } from 'antd/es/table/interface'
@@ -131,6 +132,7 @@ const TableView: React.FC<TableViewProps> = ({
   bordered = true
 }) => {
   const {
+    elements,  // 添加elements以监听数据变化
     getTableViewData,
     loadAllElements,
     updateElement,
@@ -142,6 +144,9 @@ const TableView: React.FC<TableViewProps> = ({
     error
   } = useModelContext()
 
+  // 调试：监听elements变化
+  console.log('TableView: elements对象变化了', Object.keys(elements).length, elements);
+
   // 组件状态
   const [editingRow, setEditingRow] = useState<EditingRow | null>(null)
   const [searchValue, setSearchValue] = useState('')
@@ -149,10 +154,16 @@ const TableView: React.FC<TableViewProps> = ({
   const [currentFilters, setCurrentFilters] = useState<FilterParam[]>([])
   const [form] = Form.useForm()
   const [definitionMap, setDefinitionMap] = useState<Map<string, any>>(new Map())
+  
+  // 编辑对话框状态
+  const [editDialogVisible, setEditDialogVisible] = useState(false)
+  const [editingElement, setEditingElement] = useState<any>(null)
 
   // 从ModelContext获取表格数据
   const tableData = useMemo(() => {
+    console.log('TableView.tableData: useMemo重新计算, elements数量:', Object.keys(elements).length);
     let data = getTableViewData()
+    console.log('TableView.tableData: getTableViewData返回数据量:', data.length);
     
     // 创建Definition映射，存储完整的definition对象
     const defMap = new Map<string, any>()
@@ -168,8 +179,9 @@ const TableView: React.FC<TableViewProps> = ({
       data = data.filter((r: any) => r.eClass === 'RequirementUsage')
     }
     
+    console.log('TableView.tableData: 最终返回数据量:', data.length);
     return data
-  }, [getTableViewData, usageOnly])
+  }, [elements, usageOnly])  // 修复：只依赖elements和usageOnly，移除函数引用
 
   // 加载数据
   const loadData = useCallback((params: QueryParams = {}) => {
@@ -262,11 +274,24 @@ const TableView: React.FC<TableViewProps> = ({
     return () => clearTimeout(timer)
   }, [searchValue, handleSearch])
 
-  // 编辑行
+  // 编辑行 - 打开编辑对话框
   const handleEdit = useCallback((record: TableRowData) => {
-    setEditingRow({ key: record.id, record })
-    form.setFieldsValue(record)
-  }, [form])
+    console.log('TableView.handleEdit: 点击编辑按钮, record:', record);
+    setEditingElement(record)
+    setEditDialogVisible(true)
+  }, [])
+
+  // 处理编辑对话框关闭
+  const handleEditDialogClose = useCallback(() => {
+    setEditDialogVisible(false)
+    setEditingElement(null)
+  }, [])
+
+  // 处理编辑对话框保存
+  const handleEditDialogSave = useCallback((updatedElement: any) => {
+    // 不需要刷新数据，EditDialog使用的updateElement已经更新了ModelContext的状态
+    // tableData会自动响应elements状态的变化而更新
+  }, [])
 
   // 保存编辑
   const handleSave = useCallback(async () => {
@@ -276,8 +301,7 @@ const TableView: React.FC<TableViewProps> = ({
       const values = await form.validateFields()
       await updateElement(editingRow.key, values)
       setEditingRow(null)
-      message.success('保存成功')
-      // 不需要loadData，updateElement已经更新了本地状态
+      // EditDialog已经显示保存成功消息，这里不再重复
     } catch (error) {
       message.error('保存失败')
       console.error('保存编辑失败:', error)
@@ -349,7 +373,7 @@ const TableView: React.FC<TableViewProps> = ({
         }
       },
       {
-        title: '短名称',
+        title: '需求名称',
         dataIndex: 'declaredShortName',
         key: 'declaredShortName',
         width: 150,
@@ -360,32 +384,10 @@ const TableView: React.FC<TableViewProps> = ({
             return (
               <Form.Item 
                 name="declaredShortName" 
-                rules={[{ required: false }]}
+                rules={[{ required: true, message: '请输入需求名称' }]}
                 style={{ margin: 0 }}
               >
-                <Input size="small" placeholder="短名称" />
-              </Form.Item>
-            )
-          }
-          return text || '-'
-        }
-      },
-      {
-        title: '名称',
-        dataIndex: 'declaredName',
-        key: 'declaredName',
-        width: 200,
-        sorter: sortable,
-        ellipsis: true,
-        render: (text: string, record: TableRowData) => {
-          if (editingRow && editingRow.key === record.id) {
-            return (
-              <Form.Item 
-                name="declaredName" 
-                rules={[{ required: true, message: '请输入名称' }]}
-                style={{ margin: 0 }}
-              >
-                <Input size="small" />
+                <Input size="small" placeholder="需求名称" />
               </Form.Item>
             )
           }
@@ -393,22 +395,22 @@ const TableView: React.FC<TableViewProps> = ({
         }
       },
       {
-        title: '文本描述',
-        dataIndex: 'text',
-        key: 'text',
+        title: '需求描述',
+        dataIndex: 'declaredName',
+        key: 'declaredName',
         ellipsis: true,
-        render: (text?: string, record: any) => {
+        render: (declaredName?: string, record: any) => {
           if (editingRow && editingRow.key === record.id) {
             return (
               <Form.Item 
-                name="text" 
+                name="declaredName" 
                 style={{ margin: 0 }}
               >
-                <Input.TextArea size="small" rows={2} />
+                <Input.TextArea size="small" rows={2} placeholder="需求描述" />
               </Form.Item>
             )
           }
-          const desc = text || record.documentation || '-'
+          const desc = declaredName || '-'
           return (
             <span style={{ fontSize: '13px' }}>
               {desc.length > 100 ? `${desc.substring(0, 100)}...` : desc}
@@ -430,7 +432,24 @@ const TableView: React.FC<TableViewProps> = ({
           { text: '已废弃', value: 'deprecated' }
         ] : undefined,
         filterIcon: <FilterOutlined />,
-        render: (status: string) => {
+        render: (status: string, record: TableRowData) => {
+          if (editingRow && editingRow.key === record.id) {
+            return (
+              <Form.Item 
+                name="status" 
+                style={{ margin: 0 }}
+                initialValue={status || 'draft'}
+              >
+                <Select size="small" style={{ width: '100%' }}>
+                  <Select.Option value="draft">草稿</Select.Option>
+                  <Select.Option value="approved">已批准</Select.Option>
+                  <Select.Option value="implemented">已实现</Select.Option>
+                  <Select.Option value="verified">已验证</Select.Option>
+                  <Select.Option value="deprecated">已废弃</Select.Option>
+                </Select>
+              </Form.Item>
+            )
+          }
           return status ? (
             <Tag color={getStatusColor(status)}>
               {getStatusText(status)}
@@ -661,6 +680,14 @@ const TableView: React.FC<TableViewProps> = ({
             加载失败: {error.message}
           </div>
         )}
+        
+        {/* 编辑对话框 */}
+        <EditDialog
+          visible={editDialogVisible}
+          element={editingElement}
+          onClose={handleEditDialogClose}
+          onSave={handleEditDialogSave}
+        />
     </div>
   )
 }

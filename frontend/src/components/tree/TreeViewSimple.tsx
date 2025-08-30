@@ -65,13 +65,14 @@ const TreeViewSimple: React.FC<TreeViewProps> = ({
     
     const treeNodes = filteredElements.map((item: any) => ({
       key: item.id || item.elementId,
-      title: item.attributes?.declaredName || 
+      // REQ-TEXT-SIMPLE-001-2: 使用declaredShortName作为标题
+      title: item.attributes?.declaredShortName || 
+             item.declaredShortName ||
              item.attributes?.reqId || 
-             item.declaredName || 
              item.reqId || 
-             item.attributes?.documentation || 
-             item.documentation || 
              '未命名元素',
+      // declaredName作为描述，可以在tooltip中显示
+      description: item.attributes?.declaredName || item.declaredName || '',
       children: []
     }))
     

@@ -23,7 +23,7 @@ TEST_ID="QUICK-$(date +%s)"
 echo "   创建需求..."
 CREATE_RESULT=$(curl -s -X POST "http://localhost:8080/api/v1/requirements" \
     -H "Content-Type: application/json" \
-    -d "{\"elementId\":\"$TEST_ID\",\"reqId\":\"$TEST_ID\",\"name\":\"快速回归测试需求\"}")
+    -d "{\"elementId\":\"$TEST_ID\",\"reqId\":\"$TEST_ID\",\"declaredShortName\":\"快速测试\",\"declaredName\":\"快速回归测试需求描述\"}")
 
 if echo "$CREATE_RESULT" | grep -q "$TEST_ID"; then
     echo "✅ 创建功能正常"

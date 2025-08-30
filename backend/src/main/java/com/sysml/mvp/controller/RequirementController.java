@@ -112,6 +112,21 @@ public class RequirementController {
     }
     
     /**
+     * 【REQ-EDIT-001-5】部分更新需求定义（PATCH）
+     * @param id 需求定义ID
+     * @param updates 部分更新数据
+     * @return 200 OK 和更新后的需求定义
+     */
+    @PatchMapping("/{id}")
+    public ResponseEntity<RequirementDTO> patchRequirement(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> updates) {
+        ElementDTO updatedElement = requirementService.updateRequirement(id, updates);
+        RequirementDTO responseDto = elementMapper.toRequirementDTO(updatedElement);
+        return ResponseEntity.ok(responseDto);
+    }
+    
+    /**
      * 【REQ-C1-3】删除需求定义
      * @param id 需求定义ID
      * @return 204 No Content，或409 Conflict如果被引用
@@ -170,6 +185,22 @@ public class RequirementController {
             error.put("message", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
         }
+    }
+    
+    /**
+     * 【REQ-EDIT-001-5】部分更新需求使用（PATCH）
+     * @param id 需求使用ID
+     * @param updates 部分更新数据
+     * @return 200 OK 和更新后的需求使用
+     */
+    @PatchMapping("/usages/{id}")
+    public ResponseEntity<RequirementDTO> patchRequirementUsage(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> updates) {
+        // 使用universalElementService的patchElement方法
+        ElementDTO updatedElement = requirementService.updateRequirement(id, updates);
+        RequirementDTO responseDto = elementMapper.toRequirementDTO(updatedElement);
+        return ResponseEntity.ok(responseDto);
     }
     
     /**

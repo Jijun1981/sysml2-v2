@@ -48,6 +48,24 @@ class RequirementService {
     return response.data
   }
 
+  // 获取所有Definition（用于下拉选择）
+  async getDefinitions() {
+    const response = await axios.get(`${API_BASE_URL}/requirements`)
+    return response.data
+  }
+
+  // 更新RequirementDefinition
+  async updateDefinition(id: string, data: Partial<RequirementDefinition>) {
+    const response = await axios.patch(`${API_BASE_URL}/requirements/${id}`, data)
+    return response.data
+  }
+
+  // 更新RequirementUsage
+  async updateUsage(id: string, data: Partial<RequirementUsage>) {
+    const response = await axios.patch(`${API_BASE_URL}/requirements/usages/${id}`, data)
+    return response.data
+  }
+
   async updateRequirement(id: string, data: Partial<RequirementDefinition>) {
     const response = await axios.put(`${API_BASE_URL}/requirements/${id}`, data)
     return response.data

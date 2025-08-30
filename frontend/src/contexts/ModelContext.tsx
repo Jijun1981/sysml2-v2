@@ -140,6 +140,35 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
     last: true
   })
 
+  // ElementDTO转换为SSOT格式的通用方法
+  const convertElementDTOToSSOT = useCallback((elementDTO: any) => {
+    // 确保使用唯一ID
+    const id = elementDTO.elementId || elementDTO.id || `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    return {
+      ...elementDTO,
+      id: id,
+      eClass: elementDTO.eClass || elementDTO.eclass, // 兼容小写的eclass
+      attributes: {
+        // 标准化字段映射
+        declaredName: elementDTO.properties?.declaredName || elementDTO.declaredName,
+        declaredShortName: elementDTO.properties?.declaredShortName || elementDTO.declaredShortName,
+        documentation: elementDTO.properties?.documentation || elementDTO.documentation || elementDTO.properties?.text || elementDTO.text,
+        requirementDefinition: elementDTO.properties?.requirementDefinition || elementDTO.requirementDefinition || elementDTO.properties?.of || elementDTO.of,
+        source: elementDTO.properties?.source || elementDTO.source,
+        target: elementDTO.properties?.target || elementDTO.target,
+        status: elementDTO.properties?.status || elementDTO.status || 'active',
+        priority: elementDTO.properties?.priority || elementDTO.priority,
+        verificationMethod: elementDTO.properties?.verificationMethod || elementDTO.verificationMethod,
+        reqId: elementDTO.properties?.reqId || elementDTO.reqId,
+        // 保持向后兼容性
+        text: elementDTO.properties?.documentation || elementDTO.documentation || elementDTO.properties?.text || elementDTO.text,
+        of: elementDTO.properties?.requirementDefinition || elementDTO.requirementDefinition || elementDTO.properties?.of || elementDTO.of,
+        ...elementDTO.properties,
+        ...elementDTO
+      }
+    }
+  }, [])
+
   // 设置项目ID并清理状态
   const handleSetProjectId = useCallback((newProjectId: string) => {
     setCurrentProjectId(newProjectId)
@@ -182,33 +211,24 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [convertElementDTOToSSOT])
 
   // 元素更新
   const updateElement = useCallback(async (id: string, attributes: Record<string, any>): Promise<ElementData> => {
+    console.log('ModelContext.updateElement: 开始, id:', id, 'attributes:', attributes);
     setLoading(true)
     setError(null)
     try {
       const response = await updateUniversalElement(id, attributes)
-      const elementId = response.elementId || response.id || id
-      const updatedElement: ElementData = {
-        ...response,
-        id: elementId,
-        eClass: response.eClass,
-        attributes: {
-          declaredName: response.declaredName,
-          declaredShortName: response.declaredShortName,
-          of: response.of,
-          source: response.source,
-          target: response.target,
-          status: response.status || 'active',
-          ...response
-        }
-      }
+      console.log('ModelContext.updateElement: 后端返回:', response);
+      // 使用convertElementDTOToSSOT来正确转换后端返回的格式
+      const updatedElement = convertElementDTOToSSOT(response)
+      console.log('ModelContext.updateElement: 转换后:', updatedElement);
       setElementsState(prev => ({
         ...prev,
-        [elementId]: updatedElement
+        [updatedElement.id]: updatedElement
       }))
+      console.log('ModelContext.updateElement: 状态已更新');
       return updatedElement
     } catch (err) {
       const error = err instanceof Error ? err : new Error('更新元素失败')
@@ -217,7 +237,7 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [convertElementDTOToSSOT])
 
   // 元素删除
   const deleteElement = useCallback(async (id: string): Promise<void> => {
@@ -241,35 +261,6 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({
       throw error
     } finally {
       setLoading(false)
-    }
-  }, [])
-
-  // ElementDTO转换为SSOT格式的通用方法
-  const convertElementDTOToSSOT = useCallback((elementDTO: any) => {
-    // 确保使用唯一ID
-    const id = elementDTO.elementId || elementDTO.id || `element-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    return {
-      ...elementDTO,
-      id: id,
-      eClass: elementDTO.eClass || elementDTO.eclass, // 兼容小写的eclass
-      attributes: {
-        // 标准化字段映射
-        declaredName: elementDTO.properties?.declaredName || elementDTO.declaredName,
-        declaredShortName: elementDTO.properties?.declaredShortName || elementDTO.declaredShortName,
-        documentation: elementDTO.properties?.documentation || elementDTO.documentation || elementDTO.properties?.text || elementDTO.text,
-        requirementDefinition: elementDTO.properties?.requirementDefinition || elementDTO.requirementDefinition || elementDTO.properties?.of || elementDTO.of,
-        source: elementDTO.properties?.source || elementDTO.source,
-        target: elementDTO.properties?.target || elementDTO.target,
-        status: elementDTO.properties?.status || elementDTO.status || 'active',
-        priority: elementDTO.properties?.priority || elementDTO.priority,
-        verificationMethod: elementDTO.properties?.verificationMethod || elementDTO.verificationMethod,
-        reqId: elementDTO.properties?.reqId || elementDTO.reqId,
-        // 保持向后兼容性
-        text: elementDTO.properties?.documentation || elementDTO.documentation || elementDTO.properties?.text || elementDTO.text,
-        of: elementDTO.properties?.requirementDefinition || elementDTO.requirementDefinition || elementDTO.properties?.of || elementDTO.of,
-        ...elementDTO.properties,
-        ...elementDTO
-      }
     }
   }, [])
 
